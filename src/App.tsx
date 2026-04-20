@@ -27,6 +27,7 @@ import {
   Info, 
   Download, 
   Filter,
+  List,
   PlusCircle,
   X,
   ChevronRight,
@@ -35,7 +36,9 @@ import {
   Users,
   DollarSign,
   PieChart as PieChartIcon,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -73,7 +76,8 @@ const COLORS = ['#1a1a1a', '#4a4a4a', '#8e8e8e', '#c1c1c1', '#f0f0f0', '#ff6b35'
 export default function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'data'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'data' | 'segmentation'>('overview');
+  const [selectedPhien, setSelectedPhien] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Example data to show on load
@@ -248,7 +252,6 @@ export default function App() {
   }, [data]);
 
   // --- Rendering Functions ---
-
   const renderSidebar = () => (
     <div className="w-64 border-r border-slate-200 bg-white h-screen flex flex-col pt-8 sticky top-0">
       <div className="px-6 mb-8 flex items-center gap-2">
@@ -261,6 +264,7 @@ export default function App() {
       <nav className="flex-1 px-4 space-y-1">
         {[
           { id: 'overview', label: 'Overview', icon: BarChart3 },
+          { id: 'segmentation', label: 'Analyticss', icon: Filter },
           { id: 'charts', label: 'Analytics', icon: TrendingUp },
           { id: 'data', label: 'Raw Data', icon: TableIcon },
         ].map((item) => (
@@ -279,80 +283,127 @@ export default function App() {
           </button>
         ))}
       </nav>
-
-      <div className="p-4 mt-auto">
-        <div className="bg-slate-50 rounded-2xl p-4 border border-dashed border-slate-200 text-center">
-          <p className="text-xs text-slate-500 mb-3">Try our sample data to explore features.</p>
-          <button 
-            onClick={loadSampleData}
-            className="text-xs font-semibold bg-white border border-slate-200 px-4 py-2 rounded-full hover:bg-slate-100 transition shadow-sm w-full"
-          >
-            Load Sample
-          </button>
-        </div>
-      </div>
     </div>
   );
 
+
   const renderEmptyState = () => (
-    <div 
-      className={cn(
-        "flex-1 flex flex-col items-center justify-center min-h-[80vh] transition-all p-8",
-        isDragging ? "bg-slate-100 scale-[0.99]" : "bg-transparent"
-      )}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full text-center space-y-6"
-      >
-        <div className="relative mx-auto w-24 h-24 mb-4">
-          <div className="absolute inset-0 bg-brand-primary opacity-5 rounded-full animate-pulse" />
-          <div className="relative z-10 w-full h-full flex items-center justify-center bg-white border-2 border-dashed border-slate-200 rounded-full shadow-inner">
-            <Upload className="w-8 h-8 text-slate-400" />
-          </div>
-        </div>
+    <div className="flex-1 flex min-h-screen">
+      {/* Left side: Blue accent section */}
+      <div className="hidden lg:flex w-1/2 bg-brand-primary items-center justify-center p-12 text-white relative overflow-hidden">
+        {/* Abstract background elements */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-white/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-[-5%] right-[-5%] w-[40%] h-[40%] bg-black/20 rounded-full blur-2xl" />
         
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 leading-tight">Giao Diện Báo Cáo Thông Minh</h2>
-          <p className="text-slate-500">Kéo thả tệp Excel của bạn hoặc chọn tệp để bắt đầu trực quan hóa dữ liệu.</p>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-brand-primary text-white font-semibold py-3 px-8 rounded-2xl hover:bg-slate-800 transition shadow-lg shadow-brand-primary/10 flex items-center justify-center gap-2"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Chọn Tệp Excel</span>
-          </button>
-          <p className="text-sm text-slate-400">Định dạng hỗ trợ: XLSX, XLS, CSV</p>
-        </div>
-
-        <div className="pt-8 flex items-center justify-center gap-4 text-slate-300">
-          <div className="h-px w-12 bg-slate-200" />
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Bắt đầu nhanh</span>
-          <div className="h-px w-12 bg-slate-200" />
-        </div>
-
-        <button 
-          onClick={loadSampleData}
-          className="text-slate-600 font-medium hover:text-brand-primary transition flex items-center justify-center gap-1 mx-auto"
+        <motion.div 
+          initial={{ opacity: 0, x: -30 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="relative z-10 space-y-8 max-w-lg"
         >
-          Sử dụng dữ liệu mẫu
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </motion.div>
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        accept=".xlsx, .xls, .csv" 
-        className="hidden" 
-      />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-[0.2em] backdrop-blur-md">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            PC VŨNG TÀU
+          </div>
+          
+          <div className="space-y-4">
+            <h2 className="text-6xl font-black tracking-tighter leading-none uppercase italic">
+              Phân Tích <br />
+              <span className="text-white/70">Dữ Liệu</span> <br />
+              Công Nợ
+            </h2>
+            <div className="h-1.5 w-20 bg-white rounded-full" />
+          </div>
+
+          <p className="text-blue-50 text-xl font-medium leading-relaxed opacity-90">
+            Hệ thống tự động hóa việc phân tách số kỳ nợ, lọc khách hàng thoái hoàn và cảnh báo nợ khó đòi chỉ trong vài giây.
+          </p>
+          
+          <div className="flex flex-col gap-6 pt-8">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 p-2 bg-white/10 rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-blue-200" />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">Tự động phân nhóm</h4>
+                <p className="text-blue-200/80 text-sm">Phân tách nợ theo Phiên 20, B2, B3 và B1 ngay lập tức.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4">
+              <div className="mt-1 p-2 bg-white/10 rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-blue-200" />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">Xuất danh sách mẫu</h4>
+                <p className="text-blue-200/80 text-sm">Hỗ trợ xuất biểu mẫu thu hồi nợ và thoái hoàn chuyên nghiệp.</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Right side: Compact Upload Card */}
+      <div 
+        className={cn(
+          "flex-1 flex flex-col items-center justify-center transition-all p-8 md:p-12 bg-slate-50 relative",
+          isDragging ? "bg-slate-100 scale-[0.99]" : ""
+        )}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 25 }}
+          className="max-w-sm w-full text-center space-y-8 bg-white p-10 rounded-[2.5rem] shadow-2xl border border-slate-100 relative z-10"
+        >
+          <div className="relative mx-auto w-24 h-24 mb-2">
+            <div className="absolute inset-0 bg-brand-primary opacity-10 rounded-full animate-bounce duration-[3000ms]" />
+            <div className="relative z-10 w-full h-full flex items-center justify-center bg-white border-2 border-dashed border-slate-200 rounded-full shadow-inner group-hover:border-brand-primary transition-colors">
+              <Upload className="w-8 h-8 text-slate-400" />
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-tight">Tải Báo Cáo</h2>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed px-4">Kéo thả tệp Excel của bạn hoặc chọn tệp để bắt đầu phân tích dữ liệu.</p>
+          </div>
+
+          <div className="flex flex-col gap-4 pt-4">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="group relative overflow-hidden bg-brand-primary text-white font-bold py-5 px-8 rounded-2xl hover:bg-blue-700 transition-all duration-300 shadow-xl shadow-brand-primary/20 flex items-center justify-center gap-3"
+            >
+              <PlusCircle className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
+              <span>Bắt đầu ngay</span>
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20 transform translate-y-full group-hover:translate-y-0 transition-transform" />
+            </button>
+            
+            <div className="flex items-center justify-center gap-3 py-2">
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  <FileSpreadsheet className="w-3 h-3" />
+                  .XLSX
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  <FileSpreadsheet className="w-3 h-3" />
+                  .CSV
+                </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Decorative elements for the right side */}
+        <div className="absolute top-1/4 right-1/4 w-32 h-32 bg-blue-100/50 rounded-full blur-3xl -z-0" />
+        <div className="absolute bottom-1/4 left-1/4 w-48 h-48 bg-slate-200/40 rounded-full blur-3xl -z-0" />
+        
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange} 
+          accept=".xlsx, .xls, .csv" 
+          className="hidden" 
+        />
+      </div>
     </div>
   );
 
@@ -423,7 +474,7 @@ export default function App() {
 
   const parseDateValue = (val: any) => {
     if (!val) return null;
-    if (val instanceof Date) return val;
+    if (val instanceof Date) return new Date(val.getFullYear(), val.getMonth(), val.getDate());
 
     if (typeof val === 'number') {
       const d = new Date((val - 25569) * 86400 * 1000);
@@ -431,21 +482,30 @@ export default function App() {
     }
 
     const str = String(val).trim();
+    
+    // 1. Try manual parsing for DD/MM/YYYY or DD/MM/YY (highest priority)
     const parts = str.split(/[\/\-]/);
     if (parts.length === 3) {
       const d = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10);
       let y = parseInt(parts[2], 10);
+      
+      // Handle 2-digit years (e.g., "25" -> 2025)
       if (y < 100) y += 2000;
       
       const dateObj = new Date(y, m - 1, d);
-      if (!isNaN(dateObj.getTime())) return dateObj;
+      // Verify the date is valid and meaningful
+      if (!isNaN(dateObj.getTime()) && dateObj.getFullYear() === y && dateObj.getMonth() === m - 1) {
+        return dateObj;
+      }
     }
 
-    const fallback = new Date(str);
-    if (!isNaN(fallback.getTime())) {
-      return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+    // 2. Fallback to native parsing for other formats
+    const nativeDate = new Date(str);
+    if (!isNaN(nativeDate.getTime())) {
+      return new Date(nativeDate.getFullYear(), nativeDate.getMonth(), nativeDate.getDate());
     }
+    
     return null;
   };
 
@@ -480,7 +540,7 @@ export default function App() {
     const filteredData = resultWithDays
       .filter(item => {
         const amount = Number(item.row[tongTienCol]) || 0;
-        return item.diffDays > 177 && amount >= 0;
+        return item.diffDays > 177 && amount > 0;
       })
       .map(item => ({
         ...item.row,
@@ -498,6 +558,14 @@ export default function App() {
     XLSX.writeFile(workbook, "khach_hang_no_kho_doi.xlsx");
   };
 
+  const handleExport = () => {
+    if (!data) return;
+    const worksheet = XLSX.utils.json_to_sheet(data.rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Báo cáo tổng hợp");
+    XLSX.writeFile(workbook, "bao_cao_tong_hop.xlsx");
+  };
+
   const renderOverview = () => {
     if (!data || !metrics) return null;
     
@@ -509,7 +577,7 @@ export default function App() {
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold tracking-tight text-slate-900">Tổng Quan Báo Cáo</h2>
-            <p className="text-slate-500 mt-1">Found {data.rows.length} records in <span className="font-medium text-slate-900">{data.fileName}</span></p>
+            <p className="text-slate-500 mt-1">Tìm thấy {data.rows.length} bản ghi trong <span className="font-medium text-slate-900">{data.fileName}</span></p>
           </div>
           
           <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
@@ -537,7 +605,7 @@ export default function App() {
 
             <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block" />
             
-            <button className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition shadow-sm h-fit self-end">
+            <button className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition shadow-sm h-fit self-end">
                <Download className="w-4 h-4" />
                Xuất PDF
              </button>
@@ -678,6 +746,217 @@ export default function App() {
     );
   };
 
+  const renderSegmentationView = () => {
+    if (!data) return null;
+
+    return (
+      <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 italic uppercase">Phân Tích Khách Hàng</h2>
+            <p className="text-slate-500 mt-1">Phân tích chi tiết nợ theo số kỳ (số lần phát hành hóa đơn chưa thanh toán)</p>
+          </div>
+          
+          <div className="flex gap-3">
+             <button 
+              onClick={() => handleExport()}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              Tải File Tổng
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-brand-primary flex items-center justify-center shadow-lg shadow-brand-primary/20">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 leading-none">CHỌN PHIÊN CẦN XEM</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Lọc dữ liệu theo Mã Sổ GCS (3 ký tự đầu)</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 min-w-[200px]">
+                <span className="text-[10px] font-black uppercase text-slate-400 px-1 tracking-widest">Chọn Loại Phiên</span>
+                <div className="relative group">
+                  <select 
+                    value={selectedPhien}
+                    onChange={(e) => setSelectedPhien(e.target.value)}
+                    className="w-full h-11 pl-4 pr-10 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="all">Tất cả Phiên</option>
+                    <option value="20">Phiên 20</option>
+                    <option value="B2">Phiên B2</option>
+                    <option value="B3">Phiên B3</option>
+                    <option value="KH110">KH 110 (Sổ B3DD004ZA)</option>
+                    <option value="B1">Phiên 1B (Loại khác)</option>
+                  </select>
+                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 rotate-90 pointer-events-none group-focus-within:text-brand-primary transition-colors" />
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-separate border-spacing-0">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">STT</th>
+                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Kỳ nợ</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số KH</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số HĐ</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Tiền Nợ (đ)</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedData.map((row, idx) => (
+                    <tr key={idx} className="group hover:bg-blue-50/50 transition-all duration-300">
+                      <td className="px-6 py-5 border-b border-slate-100 font-bold text-slate-400 tabular-nums">
+                        {idx + 1}
+                      </td>
+                      <td className="px-6 py-5 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ring-4 ring-slate-50 shadow-sm",
+                            row.term === 1 ? "bg-green-100 text-green-700" :
+                            row.term === 2 ? "bg-blue-100 text-blue-700" :
+                            row.term === 3 ? "bg-orange-100 text-orange-700" :
+                            "bg-red-100 text-red-700"
+                          )}>
+                            {row.term}
+                          </div>
+                          <span className="font-bold text-slate-900">{row.label}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
+                        {row.customers.toLocaleString()} KH
+                      </td>
+                      <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
+                        {row.invoices.toLocaleString()} HĐ
+                      </td>
+                      <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-black text-slate-900">
+                        {row.amount.toLocaleString()} đ
+                      </td>
+                      <td className="px-6 py-5 border-b border-slate-50 text-right">
+                        <button 
+                          onClick={() => exportTermData(row.term)}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase hover:bg-blue-600 transition-all shadow-sm active:scale-95 translate-y-0 hover:-translate-y-0.5"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Xuất Data
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {groupedData.length > 0 && (
+                    <tr className="bg-black text-white shadow-xl">
+                      <td className="px-6 py-6 border-b border-slate-900"></td>
+                      <td className="px-6 py-6 border-b border-slate-900 font-black uppercase text-[10px] tracking-[0.2em] italic">Tổng cộng</td>
+                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
+                        {groupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()} KH
+                      </td>
+                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
+                        {groupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()} HĐ
+                      </td>
+                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-black text-lg">
+                        {groupedData.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} đ
+                      </td>
+                      <td className="px-6 py-6 border-b border-slate-900"></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {selectedPhien !== 'all' && (
+              <div className="mt-12 space-y-6">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                      <List className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900 leading-none">Danh sách chi tiết</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Trực quan danh sách hóa đơn theo tiêu chí đã lọc</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase text-slate-400 tracking-widest">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    Đang hiển thị {Math.min(baseFilteredRows.length, 100).toLocaleString()} / {baseFilteredRows.length.toLocaleString()} dòng
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden border-t-4 border-t-indigo-500">
+                  <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                    <table className="w-full text-xs border-separate border-spacing-0">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-50 shadow-sm">
+                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">ID HĐ</th>
+                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Mã KH</th>
+                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Tên Khách Hàng</th>
+                          <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Kỳ</th>
+                          <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Tháng</th>
+                          <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Năm</th>
+                          <th className="px-5 py-4 text-right font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Tổng Tiền</th>
+                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 whitespace-nowrap">Ngày Phát Hành</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {baseFilteredRows.slice(0, 100).map((row, i) => {
+                          const find = (name: string) => {
+                            const lower = name.toLowerCase().replace(/\s/g, '');
+                            const col = data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
+                            return col ? row[col] : null;
+                          };
+
+                          return (
+                            <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
+                              <td className="px-5 py-3.5 font-mono text-slate-500 group-hover:text-indigo-600 transition-colors">{find('id_hdon')?.toString() || '-'}</td>
+                              <td className="px-5 py-3.5 font-bold text-slate-900">{find('ma_khang')?.toString() || '-'}</td>
+                              <td className="px-5 py-3.5 font-medium text-slate-600 max-w-[200px] truncate">{find('ten_khang')?.toString() || '-'}</td>
+                              <td className="px-5 py-3.5 text-center font-bold text-slate-700 bg-slate-50/50">{find('ky')?.toString() || '-'}</td>
+                              <td className="px-5 py-3.5 text-center font-bold text-slate-700">{find('thang')?.toString() || '-'}</td>
+                              <td className="px-5 py-3.5 text-center font-bold text-slate-700">{find('nam')?.toString() || '-'}</td>
+                              <td className="px-5 py-3.5 text-right font-black text-indigo-700 tabular-nums">
+                                {Number(find('tổng tiền') || find('tong_tien') || 0).toLocaleString()}
+                              </td>
+                              <td className="px-5 py-3.5 font-medium text-slate-500 whitespace-nowrap">
+                                {find('ngay_phanh')?.toString() || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {baseFilteredRows.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold uppercase tracking-widest italic">
+                              Không có dữ liệu chi tiết phù hợp tiêu chí lọc
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {baseFilteredRows.length > 100 && (
+                    <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+                        Chỉ hiển thị 100 dòng đầu tiên để tối ưu hiệu suất. Vui lòng xuất dữ liệu nếu cần xem toàn bộ.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDataView = () => {
     if (!data) return null;
     return (
@@ -725,10 +1004,45 @@ export default function App() {
     );
   };
 
+  // --- Base Filtering logic shared between views ---
+  const baseFilteredRows = useMemo(() => {
+    if (!data) return [];
+
+    const findCol = (name: string) => {
+      const lower = name.toLowerCase().replace(/\s/g, '');
+      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
+    };
+
+    const maSoCol = findCol('ma_sogcs') || findCol('mã sổ') || findCol('maso') || findCol('ma_so');
+    
+    return data.rows.filter(row => {
+      if (selectedPhien === 'all') return true;
+      const maSo = row[maSoCol || '']?.toString() || '';
+      const prefix3 = maSo.substring(0, 3);
+      const prefix2 = maSo.substring(0, 2);
+
+      if (selectedPhien === '20') return prefix2 === '20' || prefix3 === '20';
+      if (selectedPhien === 'B2') return prefix2 === 'B2' || prefix3 === 'B2';
+      if (selectedPhien === 'KH110') return maSo === 'B3DD004ZA';
+      if (selectedPhien === 'B3') {
+        const isB3 = prefix2 === 'B3' || prefix3 === 'B3' || prefix2 === '3B' || prefix3 === '3B';
+        return isB3 && maSo !== 'B3DD004ZA';
+      }
+      if (selectedPhien === 'B1') {
+        const is20 = prefix2 === '20';
+        const isB2 = prefix2 === 'B2';
+        const isB3 = prefix2 === 'B3' || prefix2 === '3B';
+        const isKH110 = maSo === 'B3DD004ZA';
+        return !is20 && !isB2 && !isB3 && !isKH110;
+      }
+      return true;
+    });
+  }, [data, selectedPhien]);
+
   // --- Data Analysis for Grouped View (Phân tích Số Kỳ Nợ) ---
 
   const groupedData = useMemo(() => {
-    if (!data) return [];
+    if (!data || baseFilteredRows.length === 0) return [];
 
     const findCol = (name: string) => {
       const lower = name.toLowerCase().replace(/\s/g, '');
@@ -746,7 +1060,7 @@ export default function App() {
 
     // 1. Đếm số lần xuất hiện của mỗi khách hàng (Số kỳ nợ)
     const customerStats: Record<string, { count: number; totalAmount: number; notes: Set<string>; loaiKhang: string }> = {};
-    data.rows.forEach(row => {
+    baseFilteredRows.forEach(row => {
       const id = row[maKhangCol]?.toString();
       if (!id) return;
       const amount = Number(row[tongTienCol]) || 0;
@@ -791,7 +1105,7 @@ export default function App() {
     });
 
     return Object.values(termGroups).sort((a, b) => b.term - a.term);
-  }, [data]);
+  }, [data, baseFilteredRows]);
 
   const badDebtMonthlyData = useMemo(() => {
     if (!data) return [];
@@ -807,7 +1121,7 @@ export default function App() {
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const now = new Date();
+    const now = new Date(2026, 3, 20); // Fixed report date: 20/04/2026
     const monthlyGroups: Record<string, { month: string; count: number; totalAmount: number; sortKey: number }> = {};
 
     data.rows.forEach(row => {
@@ -815,12 +1129,10 @@ export default function App() {
       const date = parseDateValue(row[ngayPhCol]);
       
       if (date) {
-        const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const d2 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        const diffMs = d1.getTime() - d2.getTime();
-        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        const diffMs = now.getTime() - date.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diffDays > 177 && amount >= 0) {
+        if (diffDays > 177 && amount > 0) {
           const m = date.getMonth() + 1;
           const y = date.getFullYear();
           const monthLabel = `Tháng ${m}/${y}`;
@@ -852,7 +1164,7 @@ export default function App() {
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const now = new Date();
+    const now = new Date(2026, 3, 20); // Fixed report date: 20/04/2026
     let toChucAmount = 0;
     let caNhanAmount = 0;
     let toChucInvoices = 0;
@@ -864,12 +1176,10 @@ export default function App() {
       const loai = loaiKhCol ? row[loaiKhCol]?.toString() : '';
       
       if (date) {
-        const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const d2 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        const diffMs = d1.getTime() - d2.getTime();
-        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        const diffMs = now.getTime() - date.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diffDays > 177 && amount >= 0) {
+        if (diffDays > 177 && amount > 0) {
           if (loai === '1') {
             toChucAmount += amount;
             toChucInvoices += 1;
@@ -914,7 +1224,7 @@ export default function App() {
     const thoaiHoanCustomerIds = new Set<string>();
     const ngayPhCol = findCol('ngay_phanh') || findCol('ngay_ph_hdon') || findCol('ngay_hd') || findCol('ngay_ct') || findCol('invoice_date') || findCol('ngày phát hành');
     
-    const now = new Date();
+    const now = new Date(2026, 3, 20); // Fixed report date: 20/04/2026
     
     data.rows.forEach(row => {
       const maSo = row[maSoCol]?.toString() || '';
@@ -946,13 +1256,10 @@ export default function App() {
       if (ngayPhCol) {
         const date = parseDateValue(row[ngayPhCol]);
         if (date) {
-          const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const d2 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+          const diffMs = now.getTime() - date.getTime();
+          const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
           
-          const diffMs = d1.getTime() - d2.getTime();
-          const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-          
-          if (diffDays > 177 && amount >= 0) {
+          if (diffDays > 177 && amount > 0) {
             stats.noKhoDoi.hd += 1;
             stats.noKhoDoi.tien += amount;
           }
@@ -1206,6 +1513,7 @@ export default function App() {
                 transition={{ duration: 0.2 }}
               >
                 {activeTab === 'overview' && renderOverview()}
+                {activeTab === 'segmentation' && renderSegmentationView()}
                 {activeTab === 'charts' && renderChartsView()}
                 {activeTab === 'data' && renderDataView()}
               </motion.div>

@@ -6,7 +6,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Custom colors for charts/dashboard */
-  --color-brand-primary: #141414;
+  --color-brand-primary: #2563eb;
   --color-brand-muted: #E4E3E0;
 }
 
