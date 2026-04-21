@@ -38,7 +38,8 @@ import {
   PieChart as PieChartIcon,
   AlertCircle,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -263,10 +264,10 @@ export default function App() {
 
       <nav className="flex-1 px-4 space-y-1">
         {[
-          { id: 'overview', label: 'Overview', icon: BarChart3 },
-          { id: 'segmentation', label: 'Analyticss', icon: Filter },
-          { id: 'charts', label: 'Analytics', icon: TrendingUp },
-          { id: 'data', label: 'Raw Data', icon: TableIcon },
+          { id: 'overview', label: 'Tổng Quát', icon: BarChart3 },
+          { id: 'segmentation', label: 'Phân Tích', icon: Layers },
+          { id: 'charts', label: 'Nợ Khó Đòi', icon: TrendingUp },
+          { id: 'data', label: 'Tiện Ích', icon: TableIcon },
         ].map((item) => (
           <button
             key={item.id}
@@ -315,7 +316,7 @@ export default function App() {
           </div>
 
           <p className="text-blue-50 text-xl font-medium leading-relaxed opacity-90">
-            Hệ thống tự động hóa việc phân tách số kỳ nợ, lọc khách hàng thoái hoàn và cảnh báo nợ khó đòi chỉ trong vài giây.
+            Hệ thống tự động hóa việc phân tách số kỳ nợ, lọc khách hàng thoái hoàn và cảnh báo nợ khó đòi.
           </p>
           
           <div className="flex flex-col gap-6 pt-8">
@@ -325,7 +326,7 @@ export default function App() {
               </div>
               <div>
                 <h4 className="font-bold text-lg">Tự động phân nhóm</h4>
-                <p className="text-blue-200/80 text-sm">Phân tách nợ theo Phiên 20, B2, B3 và B1 ngay lập tức.</p>
+                <p className="text-blue-200/80 text-sm">Phân tách nợ theo Phiên 20, B2, B3 và B1 tức.</p>
               </div>
             </div>
             <div className="flex items-start gap-4">
@@ -334,7 +335,7 @@ export default function App() {
               </div>
               <div>
                 <h4 className="font-bold text-lg">Xuất danh sách mẫu</h4>
-                <p className="text-blue-200/80 text-sm">Hỗ trợ xuất biểu mẫu thu hồi nợ và thoái hoàn chuyên nghiệp.</p>
+                <p className="text-blue-200/80 text-sm">Hỗ trợ xuất biểu mẫu thu hồi nợ và thoái hoàn.</p>
               </div>
             </div>
           </div>
@@ -740,6 +741,96 @@ export default function App() {
                 </div>
               </div>
             </div>
+            {/* Phân Tích Nợ Nhiều Kỳ */}
+            <div>
+          <p  className="text-3xl font-bold tracking-tight text-slate-900 italic uppercase">Phân Tích Nợ Chi Tiết</p>
+                 </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-separate border-spacing-0">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Kỳ nợ</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số KH</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số HĐ</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Tiền Nợ (đ)</th>
+                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Ghi Chú</th>
+                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedData.map((row, idx) => {
+                    const total = row.toChuc + row.caNhan;
+                    const pTC = total > 0 ? (row.toChuc / total) * 100 : 0;
+                    
+                    return (
+                      <tr key={idx} className="group hover:bg-blue-50/50 transition-all duration-300">
+                        <td className="px-6 py-5 border-b border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-slate-900">{row.label}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
+                          {row.customers.toLocaleString()} KH
+                        </td>
+                        <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
+                          {row.invoices.toLocaleString()} HĐ
+                        </td>
+                        <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-black text-slate-900">
+                          {row.amount.toLocaleString()} đ
+                        </td>
+                        <td className="px-6 py-5 border-b border-slate-50 text-left">
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="w-10 h-10 rounded-full border border-slate-200 shadow-inner relative overflow-hidden" 
+                              style={{
+                                background: `conic-gradient(#3b82f6 0% ${pTC}%, #f97316 ${pTC}% 100%)`
+                              }}
+                            />
+                            <div className="flex flex-col text-[10px] font-bold leading-tight">
+                              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
+                                <span className="text-slate-400 uppercase tracking-tighter">TC:</span>
+                                <span className="text-blue-600">{pTC.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]" />
+                                <span className="text-slate-400 uppercase tracking-tighter">CN:</span>
+                                <span className="text-orange-600">{(100 - pTC).toFixed(1)}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 border-b border-slate-50 text-right">
+                          <button 
+                            onClick={() => exportTermData(row.term)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase hover:bg-blue-600 transition-all shadow-sm active:scale-95 translate-y-0 hover:-translate-y-0.5"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Xuất Data
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {groupedData.length > 0 && (
+                    <tr className="bg-black text-white shadow-xl">
+                      <td className="px-6 py-6 border-b border-slate-900 font-black uppercase text-[10px] tracking-[0.2em] italic">Tổng cộng</td>
+                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
+                        {groupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()} KH
+                      </td>
+                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
+                        {groupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()} HĐ
+                      </td>
+                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-black text-lg">
+                        {groupedData.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} đ
+                      </td>
+                      <td className="px-6 py-6 border-b border-slate-900"></td>
+                      <td className="px-6 py-6 border-b border-slate-900"></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </motion.div>
         )}
       </div>
@@ -748,25 +839,9 @@ export default function App() {
 
   const renderSegmentationView = () => {
     if (!data) return null;
-
     return (
       <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 italic uppercase">Phân Tích Khách Hàng</h2>
-            <p className="text-slate-500 mt-1">Phân tích chi tiết nợ theo số kỳ (số lần phát hành hóa đơn chưa thanh toán)</p>
-          </div>
-          
-          <div className="flex gap-3">
-             <button 
-              onClick={() => handleExport()}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              Tải File Tổng
-            </button>
-          </div>
-        </div>
+        
 
         <div className="grid grid-cols-1 gap-6">
           <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
@@ -794,83 +869,18 @@ export default function App() {
                     <option value="B2">Phiên B2</option>
                     <option value="B3">Phiên B3</option>
                     <option value="KH110">KH 110 (Sổ B3DD004ZA)</option>
-                    <option value="B1">Phiên 1B (Loại khác)</option>
+                    <option value="B1">Phiên B1 (Loại khác)</option>
                   </select>
                   <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 rotate-90 pointer-events-none group-focus-within:text-brand-primary transition-colors" />
                 </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-separate border-spacing-0">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">STT</th>
-                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Kỳ nợ</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số KH</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số HĐ</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Tiền Nợ (đ)</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedData.map((row, idx) => (
-                    <tr key={idx} className="group hover:bg-blue-50/50 transition-all duration-300">
-                      <td className="px-6 py-5 border-b border-slate-100 font-bold text-slate-400 tabular-nums">
-                        {idx + 1}
-                      </td>
-                      <td className="px-6 py-5 border-b border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ring-4 ring-slate-50 shadow-sm",
-                            row.term === 1 ? "bg-green-100 text-green-700" :
-                            row.term === 2 ? "bg-blue-100 text-blue-700" :
-                            row.term === 3 ? "bg-orange-100 text-orange-700" :
-                            "bg-red-100 text-red-700"
-                          )}>
-                            {row.term}
-                          </div>
-                          <span className="font-bold text-slate-900">{row.label}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
-                        {row.customers.toLocaleString()} KH
-                      </td>
-                      <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
-                        {row.invoices.toLocaleString()} HĐ
-                      </td>
-                      <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-black text-slate-900">
-                        {row.amount.toLocaleString()} đ
-                      </td>
-                      <td className="px-6 py-5 border-b border-slate-50 text-right">
-                        <button 
-                          onClick={() => exportTermData(row.term)}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase hover:bg-blue-600 transition-all shadow-sm active:scale-95 translate-y-0 hover:-translate-y-0.5"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          Xuất Data
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {groupedData.length > 0 && (
-                    <tr className="bg-black text-white shadow-xl">
-                      <td className="px-6 py-6 border-b border-slate-900"></td>
-                      <td className="px-6 py-6 border-b border-slate-900 font-black uppercase text-[10px] tracking-[0.2em] italic">Tổng cộng</td>
-                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
-                        {groupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()} KH
-                      </td>
-                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
-                        {groupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()} HĐ
-                      </td>
-                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-black text-lg">
-                        {groupedData.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} đ
-                      </td>
-                      <td className="px-6 py-6 border-b border-slate-900"></td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            
+
+            {/* Dashboard Chart for Filtered Data */}
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            
             </div>
 
             {selectedPhien !== 'all' && (
@@ -941,16 +951,58 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
-                  {baseFilteredRows.length > 100 && (
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
-                        Chỉ hiển thị 100 dòng đầu tiên để tối ưu hiệu suất. Vui lòng xuất dữ liệu nếu cần xem toàn bộ.
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Toàn bộ dữ liệu overview charts section can go here if needed, or keeping it clean */}
+        <div className="pt-8 border-t border-slate-100">
+           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Tổng Hợp Toàn Bộ Dữ Liệu</h3>
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Phân Bổ Nợ Theo Kỳ (Tổng)</h3>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={fullGroupedData.slice().reverse()}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                    formatter={(value: any) => [Number(value).toLocaleString() + ' đ', 'Tiền Nợ']}
+                  />
+                  <Bar dataKey="amount" radius={[6, 6, 0, 0]} fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Cơ Cấu Khách Hàng Nợ (Tổng)</h3>
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Tổ Chức', value: fullGroupedData.reduce((acc, curr) => acc + curr.toChuc, 0) },
+                      { name: 'Cá Nhân', value: fullGroupedData.reduce((acc, curr) => acc + curr.caNhan, 0) }
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    <Cell fill="#3b82f6" />
+                    <Cell fill="#f97316" />
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" align="center" height={36}/>
+                </PieChart>
+              </ResponsiveContainer>
+                          </div>
           </div>
         </div>
       </div>
@@ -1096,8 +1148,10 @@ export default function App() {
       g.customers += 1;
       g.invoices += termCount;
       
-      if (stat.loaiKhang === '1') g.toChuc += 1;
-      else if (stat.loaiKhang === '0') g.caNhan += 1;
+      const loai = stat.loaiKhang?.toString().toLowerCase().trim();
+      if (loai === '1' || loai === 'tổng công ty' || loai === 'tổ chức') g.toChuc += 1;
+      else if (loai === '0' || loai === 'cá nhân' || loai === 'ca nhan') g.caNhan += 1;
+      else g.caNhan += 1; // Default to individual if unclear
 
       stat.notes.forEach(n => {
         if (!g.notes.includes(n)) g.notes.push(n);
@@ -1106,6 +1160,65 @@ export default function App() {
 
     return Object.values(termGroups).sort((a, b) => b.term - a.term);
   }, [data, baseFilteredRows]);
+
+  const fullGroupedData = useMemo(() => {
+    if (!data) return [];
+
+    const findCol = (name: string) => {
+      const lower = name.toLowerCase().replace(/\s/g, '');
+      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
+    };
+
+    const maKhangCol = findCol('ma_khang');
+    const tongTienCol = findCol('tổng tiền');
+    const manhomKhCol = findCol('manhom_kh');
+    const loaiKhCol = findCol('loại_khang') || findCol('loaikh') || findCol('loai_khang');
+
+    if (!maKhangCol || !tongTienCol) return [];
+
+    const customerStats: Record<string, { count: number; totalAmount: number; notes: Set<string>; loaiKhang: string }> = {};
+    data.rows.forEach(row => {
+      const id = row[maKhangCol]?.toString();
+      if (!id) return;
+      const amount = Number(row[tongTienCol]) || 0;
+      const note = manhomKhCol ? row[manhomKhCol]?.toString() : '';
+      const loai = loaiKhCol ? row[loaiKhCol]?.toString() : '';
+      
+      if (!customerStats[id]) {
+        customerStats[id] = { count: 0, totalAmount: 0, notes: new Set(), loaiKhang: loai };
+      }
+      customerStats[id].count += 1;
+      customerStats[id].totalAmount += amount;
+      if (note) customerStats[id].notes.add(note);
+    });
+
+    const termGroups: Record<number, { label: string; amount: number; customers: number; invoices: number; notes: string[]; term: number; toChuc: number; caNhan: number }> = {};
+    Object.values(customerStats).forEach(stat => {
+      const termCount = stat.count;
+      if (!termGroups[termCount]) {
+        termGroups[termCount] = { 
+          label: `${termCount} Kỳ`, 
+          term: termCount,
+          amount: 0, 
+          customers: 0, 
+          invoices: 0, 
+          notes: [],
+          toChuc: 0,
+          caNhan: 0
+        };
+      }
+      const g = termGroups[termCount];
+      g.amount += stat.totalAmount;
+      g.customers += 1;
+      g.invoices += termCount;
+      
+      const loai = stat.loaiKhang?.toString().toLowerCase().trim();
+      if (loai === '1' || loai === 'tổng công ty' || loai === 'tổ chức') g.toChuc += 1;
+      else g.caNhan += 1;
+    });
+
+    return Object.values(termGroups).sort((a, b) => b.term - a.term);
+  }, [data]);
 
   const badDebtMonthlyData = useMemo(() => {
     if (!data) return [];
@@ -1281,85 +1394,7 @@ export default function App() {
     return (
       <div className="space-y-8 pb-12 animate-in fade-in duration-500">
         {/* Debt Term Analysis Table (Matching requested style) */}
-        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md overflow-hidden">
-          <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
-             <TrendingUp className="w-6 h-6 text-brand-primary" />
-             Phân Tích Số Kỳ Nợ Chi Tiết
-          </h3>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50/50">
-                  <th className="px-6 py-4 text-left font-bold text-slate-800">Số kỳ nợ</th>
-                  <th className="px-6 py-4 text-right font-bold text-slate-800">Số KH</th>
-                  <th className="px-6 py-4 text-right font-bold text-slate-800">Số HĐ</th>
-                  <th className="px-6 py-4 text-right font-bold text-slate-800">Tổng Tiền (đ)</th>
-                  <th className="px-6 py-4 text-left font-bold text-slate-800">Ghi Chú & Danh Sách</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groupedData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
-                    <td className="px-6 py-4 border-b border-slate-50">
-                      <span className="font-medium text-slate-600 underline decoration-slate-200 underline-offset-4 decoration-2">
-                        {row.term || row.label} Kỳ
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 border-b border-slate-50 text-right tabular-nums text-slate-500 font-medium whitespace-nowrap">
-                      {row.customers.toLocaleString()} KH
-                    </td>
-                    <td className="px-6 py-4 border-b border-slate-50 text-right tabular-nums text-slate-500 font-medium whitespace-nowrap">
-                      {row.invoices.toLocaleString()} HĐ
-                    </td>
-                    <td className="px-6 py-4 border-b border-slate-50 text-right tabular-nums font-bold text-red-600">
-                      {(row.amount || 0).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 border-b border-slate-50">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex flex-col gap-1">
-                          {(row.toChuc > 0 || row.caNhan > 0) && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-blue-600 px-1.5 py-0.5 bg-blue-50 rounded">Tổ chức: {row.toChuc}</span>
-                              <span className="text-[10px] font-bold text-orange-600 px-1.5 py-0.5 bg-orange-50 rounded">Cá nhân: {row.caNhan}</span>
-                            </div>
-                          )}
-                          <span className="text-[10px] text-slate-400 italic">
-                            Tỉ lệ Tổ chức: {((row.toChuc / row.customers) * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                        {row.term > 0 && (
-                          <button 
-                            onClick={() => exportTermData(row.term)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-xl hover:bg-black transition-all shadow-sm"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            File DS
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {groupedData.length > 0 && (
-                  <tr className="bg-red-50/30 font-bold">
-                    <td className="px-6 py-5 text-left text-red-900 uppercase text-[10px] tracking-widest">Tổng cộng</td>
-                    <td className="px-6 py-5 text-right tabular-nums text-red-900/80 whitespace-nowrap">
-                      {groupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()} KH
-                    </td>
-                    <td className="px-6 py-5 text-right tabular-nums text-red-900/80 whitespace-nowrap">
-                      {groupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()} HĐ
-                    </td>
-                    <td className="px-6 py-5 text-right tabular-nums text-red-700 text-lg decoration-2 underline decoration-red-200 underline-offset-4">
-                      {groupedData.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-5 border-l border-red-100/50"></td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        
 
         {/* Bad Debt Monthly Analysis */}
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md">
