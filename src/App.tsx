@@ -80,7 +80,10 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'data' | 'segmentation'>('overview');
   const [selectedPhien, setSelectedPhien] = useState<string>('all');
+  const [rawSelectedPhien, setRawSelectedPhien] = useState<string>('all'); // Independent session filter for Raw Data
   const [detailSearch, setDetailSearch] = useState<string>('');
+  const [appliedSearch, setAppliedSearch] = useState<string>(''); // For manual search execution
+  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic'); // Toggle for search logic
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Example data to show on load
@@ -1207,6 +1210,7 @@ export default function App() {
       { label: 'ĐT Dịch Vụ', targets: ['dthoaij_dvu', 'dthoai_dvu', 'điện thoại', 'dthoai'] },
       { label: 'Số Thiết Bị', targets: ['so_tbi', 'sotbi', 'số thiết bị'] },
       { label: 'Ngày Phát Hành', targets: ['ngay_phanh', 'ngayphanh', 'ngày phát hành', 'ngay_hd'] },
+      { label: 'Mã Sổ', targets: ['ma_sogcs', 'maso', 'ma_so', 'sổ gcs'] },
     ];
 
     const activeCols = requestedCols.map(c => ({
@@ -1217,15 +1221,15 @@ export default function App() {
     // Calculate totals for the filtered results
     const tongTienKey = getTargetHeader(['tong_tien', 'tongtien', 'tổng tiền', 'tiền']);
     const stats = {
-      totalRows: baseFilteredRows.length,
-      totalAmount: baseFilteredRows.reduce((acc, row) => acc + (Number(row[tongTienKey || '']) || 0), 0)
+      totalRows: rawFilteredRows.length,
+      totalAmount: rawFilteredRows.reduce((acc, row) => acc + (Number(row[tongTienKey || '']) || 0), 0)
     };
 
-    const hasFilter = selectedPhien !== 'all' || detailSearch.trim() !== '';
+    const hasFilter = rawSelectedPhien !== 'all' || appliedSearch.trim() !== '' || searchMode === 'advanced';
 
     return (
       <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-[#0f172a] text-white flex items-center justify-center shadow-lg">
               <TableIcon className="w-6 h-6" />
@@ -1236,31 +1240,127 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 max-w-xl">
-            <div className="relative group">
+          <div className="flex-1 flex flex-col md:flex-row items-center gap-3">
+            {/* Local Session Selector for Raw Data */}
+            <div className="w-full md:w-48">
+              <select 
+                value={rawSelectedPhien}
+                onChange={(e) => setRawSelectedPhien(e.target.value)}
+                className="w-full h-11 px-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm appearance-none cursor-pointer"
+              >
+                <option value="all">Tất cả Phiên</option>
+                <option value="20">Phiên 20</option>
+                <option value="B2">2 Phiên (B2)</option>
+                <option value="B3">3 Phiên (B3)</option>
+                <option value="B1">1 Phiên</option>
+                <option value="KH110">KH 110</option>
+              </select>
+            </div>
+
+            <div className="relative flex-1 group w-full">
               <input 
                 type="text"
                 value={detailSearch}
                 onChange={(e) => setDetailSearch(e.target.value)}
-                placeholder="Tìm Mã KH, Tên KH, ID Hóa đơn, Số tiền..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setSearchMode('basic');
+                    setAppliedSearch(detailSearch);
+                  }
+                }}
+                placeholder="Mã KH, Tên, ID HĐ, Số tiền, Mã Sổ..."
                 className="w-full h-11 pl-12 pr-10 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm"
               />
               <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                <Filter className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                <Search className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
               </div>
               {detailSearch && (
                 <button 
-                  onClick={() => setDetailSearch('')}
+                  onClick={() => {
+                    setDetailSearch('');
+                    setAppliedSearch('');
+                    setSearchMode('basic');
+                  }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-slate-100 rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm"
                 >
                   <X className="w-3 h-3" />
                 </button>
               )}
             </div>
+            
+            <button 
+              onClick={() => {
+                setSearchMode('basic');
+                setAppliedSearch(detailSearch);
+              }}
+              className="h-11 px-6 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-slate-900 transition-all shadow-lg shadow-indigo-100 active:scale-95 flex items-center gap-2 whitespace-nowrap w-full md:w-auto justify-center"
+            >
+              <TrendingUp className="w-4 h-4" />
+              Lấy danh sách
+            </button>
           </div>
         </div>
 
-        {hasFilter ? (
+        {/* Advanced Search Section Placeholder */}
+        <div className={`p-6 rounded-[2rem] border-2 transition-all duration-300 ${searchMode === 'advanced' ? 'bg-indigo-50 border-indigo-200 shadow-md ring-4 ring-indigo-500/5' : 'bg-slate-50/50 border-dashed border-slate-200'}`}>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+             <div className="flex items-center gap-3">
+               <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${searchMode === 'advanced' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-indigo-100 text-indigo-600'}`}>
+                 <ShieldCheck className="w-5 h-5" />
+               </div>
+               <div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">Tìm kiếm nâng cao (Kế toán)</h4>
+                  <p className="text-[10px] font-bold text-slate-400 italic">Tìm KH nợ {'>'} 2 HĐ & có ít nhất 2 tên khác nhau</p>
+               </div>
+             </div>
+             
+             <div className="flex items-center gap-2 w-full md:w-auto">
+               {searchMode === 'advanced' && (
+                 <button 
+                    onClick={() => {
+                      setSearchMode('basic');
+                      setAppliedSearch('');
+                    }}
+                    className="h-10 px-4 bg-white border border-red-200 text-red-500 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-red-50 transition-all"
+                 >
+                   <X className="w-3.5 h-3.5" />
+                   Hủy
+                 </button>
+               )}
+               <button 
+                 onClick={() => {
+                   setSearchMode('advanced');
+                   setAppliedSearch('ADVANCED_QUERY'); // Flag to trigger view
+                 }}
+                 className={`h-10 px-6 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-lg active:scale-95 ${searchMode === 'advanced' ? 'bg-slate-900 text-white shadow-slate-200' : 'bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 shadow-indigo-100'}`}
+               >
+                 <Layers className="w-3.5 h-3.5" />
+                 Lấy danh sách nâng cao
+               </button>
+
+               <button 
+                 onClick={() => {
+                   // Ensure we're exporting the CURRENTLY filtered raw data
+                   const exportData = rawFilteredRows.length > 0 ? rawFilteredRows : [];
+                   if (exportData.length === 0) {
+                     alert("Không có dữ liệu để tải. Vui lòng lấy danh sách trước.");
+                     return;
+                   }
+                   const worksheet = XLSX.utils.json_to_sheet(exportData);
+                   const workbook = XLSX.utils.book_new();
+                   XLSX.utils.book_append_sheet(workbook, worksheet, "Raw_Data_Export");
+                   XLSX.writeFile(workbook, `Bao_Cao_Truy_Van_${new Date().getTime()}.xlsx`);
+                 }}
+                 className="h-10 px-6 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-900 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+               >
+                 <Download className="w-3.5 h-3.5" />
+                 Tải DS
+               </button>
+             </div>
+          </div>
+        </div>
+
+        {hasFilter || searchMode === 'advanced' ? (
           <div className="space-y-6">
             {/* Summary Bar */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1300,7 +1400,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {baseFilteredRows.map((row, i) => (
+                    {rawFilteredRows.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-4 text-slate-400 border-r border-slate-50 font-bold tabular-nums">
                           {i + 1}
@@ -1312,7 +1412,7 @@ export default function App() {
                         ))}
                       </tr>
                     ))}
-                    {baseFilteredRows.length === 0 && (
+                    {rawFilteredRows.length === 0 && (
                       <tr>
                         <td colSpan={activeCols.length + 1} className="px-6 py-20 text-center text-slate-400 font-bold italic">
                           Không tìm thấy bản ghi nào khớp với điều kiện tìm kiếm
@@ -1322,7 +1422,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              {baseFilteredRows.length > 0 && (
+              {rawFilteredRows.length > 0 && (
                 <div className="p-6 bg-slate-50 border-t border-slate-100 text-center">
                   <p className="text-xs font-bold text-slate-400 italic uppercase">Đã tải tất cả dữ liệu theo điều kiện lọc</p>
                 </div>
@@ -1340,7 +1440,7 @@ export default function App() {
                 <p className="text-slate-500 text-sm font-medium">Để tối ưu hiệu suất, vui lòng nhập từ khóa tìm kiếm hoặc chọn một phiên cụ thể để xem chi tiết danh sách hóa đơn.</p>
               </div>
               <div className="flex items-center justify-center gap-3">
-                <span className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100">Chọn Phiên</span>
+                <span className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100">Chọn Phiên (Thoát)</span>
                 <span className="text-slate-300">hoặc</span>
                 <span className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100">Tìm kiếm KH</span>
               </div>
@@ -1352,18 +1452,14 @@ export default function App() {
   };
 
   // --- Base Filtering logic shared between views ---
+  // --- Base Filtering logic shared between Analysis/Segmentation views ---
   const baseFilteredRows = useMemo(() => {
     if (!data) return [];
 
     const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
-    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'ma kh', 'mã khách hàng']);
-    const tenKhangCol = findColumn(['ten_khang', 'tenkhang', 'tên khách hàng', 'ten khang', 'tên kh']);
-    const maKhttCol = findColumn(['ma_khtt', 'makhtt', 'mã khtt', 'ma khtt']);
-    const idHdonCol = findColumn(['id_hdon', 'idhdon', 'id hóa đơn', 'id hd', 'ma_hdon']);
-    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'tien_no', 'so tien', 'tong_no']);
     
     return data.rows.filter(row => {
-      // 1. Session Filter
+      // 1. Session Filter (Global for Analysis)
       if (selectedPhien !== 'all') {
         const maSo = row[maSoCol || '']?.toString() || '';
         const prefix2 = maSo.substring(0, 2);
@@ -1379,27 +1475,87 @@ export default function App() {
         if (selectedPhien === 'B1' && (is20 || isB2 || isB3)) return false;
       }
 
-      // 2. Search Filter (Multi-field)
-      if (detailSearch.trim()) {
-        const s = detailSearch.toLowerCase().trim();
+      return true;
+    });
+  }, [data, selectedPhien, findColumn]);
+
+  // --- Specialized Filtering logic for Raw Data Tab ---
+  const rawFilteredRows = useMemo(() => {
+    if (!data) return [];
+
+    const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'ma kh', 'mã khách hàng']);
+    const tenKhangCol = findColumn(['ten_khang', 'tenkhang', 'tên khách hàng', 'ten khang', 'tên kh']);
+    const maKhttCol = findColumn(['ma_khtt', 'makhtt', 'mã khtt', 'ma khtt']);
+    const idHdonCol = findColumn(['id_hdon', 'idhdon', 'id hóa đơn', 'id hd', 'ma_hdon']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'tien_no', 'so tien', 'tong_no']);
+
+    if (searchMode === 'advanced') {
+      // ADVANCED SEARCH LOGIC: Group by MA_KHANG, find > 2 invoices with different TEN_KHANG
+      if (!maKhangCol || !tenKhangCol) return [];
+
+      const customerGroups = new Map<string, any[]>();
+      
+      data.rows.forEach(row => {
+        const maKH = row[maKhangCol]?.toString() || '';
+        if (maKH) {
+          if (!customerGroups.has(maKH)) customerGroups.set(maKH, []);
+          customerGroups.get(maKH)!.push(row);
+        }
+      });
+
+      const suspiciousRows: any[] = [];
+      customerGroups.forEach((rows, maKH) => {
+        const uniqueNames = new Set(rows.map(r => r[tenKhangCol]?.toString() || ''));
+        // Criteria: > 2 invoices AND >= 2 different names
+        if (rows.length > 2 && uniqueNames.size >= 2) {
+          suspiciousRows.push(...rows);
+        }
+      });
+
+      return suspiciousRows;
+    }
+    
+    return data.rows.filter(row => {
+      // 1. Session Filter (Local for Raw Data)
+      if (rawSelectedPhien !== 'all') {
+        const maSo = row[maSoCol || '']?.toString() || '';
+        const prefix2 = maSo.substring(0, 2);
+
+        const is20 = prefix2 === '20';
+        const isB2 = prefix2 === 'B2';
+        const isB3 = prefix2 === 'B3';
+
+        if (rawSelectedPhien === '20' && !is20) return false;
+        if (rawSelectedPhien === 'B2' && !isB2) return false;
+        if (rawSelectedPhien === 'B3' && (maSo === 'B3AD004ZA' || !isB3)) return false;
+        if (rawSelectedPhien === 'KH110' && maSo !== 'B3AD004ZA') return false;
+        if (rawSelectedPhien === 'B1' && (is20 || isB2 || isB3)) return false;
+      }
+
+      // 2. Search Filter (Manual for Raw Data)
+      if (appliedSearch.trim()) {
+        const s = appliedSearch.toLowerCase().trim();
         const makh = row[maKhangCol || '']?.toString().toLowerCase() || '';
         const ten = row[tenKhangCol || '']?.toString().toLowerCase() || '';
         const khtt = row[maKhttCol || '']?.toString().toLowerCase() || '';
         const idhd = row[idHdonCol || '']?.toString().toLowerCase() || '';
         const money = row[tongTienCol || '']?.toString().toLowerCase() || '';
+        const masoValue = row[maSoCol || '']?.toString().toLowerCase() || '';
 
         const match = makh.includes(s) || 
                       ten.includes(s) || 
                       khtt.includes(s) || 
                       idhd.includes(s) || 
-                      money.includes(s);
+                      money.includes(s) ||
+                      masoValue.includes(s);
         
         if (!match) return false;
       }
 
       return true;
     });
-  }, [data, selectedPhien, detailSearch, findColumn]);
+  }, [data, rawSelectedPhien, appliedSearch, findColumn]);
 
   // --- Data Analysis for Grouped View (Phân tích Số Kỳ Nợ) ---
 
