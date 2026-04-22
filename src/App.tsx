@@ -111,47 +111,50 @@ export default function App() {
   const processFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const bstr = e.target?.result;
-      const workbook = XLSX.read(bstr, { type: 'binary' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const rawJson = XLSX.utils.sheet_to_json(worksheet);
+      try {
+        const dataArr = e.target?.result;
+        const workbook = XLSX.read(dataArr, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rawJson = XLSX.utils.sheet_to_json(worksheet);
 
-      if (rawJson.length > 0) {
-        // Data cleaning: filter out empty rows and force types
-        const headers = Object.keys(rawJson[0] as object);
-        const metadata: ColumnMetadata[] = headers.map(header => {
-          // Check types across multiple rows for better accuracy
-          const sampleValues = rawJson.slice(0, 5).map(r => (r as any)[header]);
-          const isNumeric = sampleValues.every(v => v === undefined || v === null || !isNaN(Number(v)));
-          return { name: header, type: isNumeric ? 'number' : 'string' };
-        });
-
-        const rows = rawJson.map((row: any) => {
-          const newRow: any = { ...row };
-          metadata.forEach(meta => {
-            if (meta.type === 'number' && row[meta.name] !== undefined) {
-              const val = Number(row[meta.name]);
-              newRow[meta.name] = isNaN(val) ? 0 : val;
-            }
+        if (rawJson.length > 0) {
+          const headers = Object.keys(rawJson[0] as object);
+          const metadata: ColumnMetadata[] = headers.map(header => {
+            const sampleValues = rawJson.slice(0, 5).map(r => (r as any)[header]);
+            const isNumeric = sampleValues.every(v => v === undefined || v === null || v === '' || !isNaN(Number(v)));
+            return { name: header, type: isNumeric ? 'number' : 'string' };
           });
-          return newRow;
-        });
 
-        const numericCols = metadata.filter(m => m.type === 'number');
-        const stringCols = metadata.filter(m => m.type === 'string');
+          const rows = rawJson.map((row: any) => {
+            const newRow: any = { ...row };
+            metadata.forEach(meta => {
+              if (meta.type === 'number' && row[meta.name] !== undefined) {
+                const val = Number(row[meta.name]);
+                newRow[meta.name] = isNaN(val) ? 0 : val;
+              }
+            });
+            return newRow;
+          });
 
-        setData({
-          fileName: file.name,
-          headers,
-          rows,
-          metadata,
-          selectedX: stringCols[0]?.name || headers[0],
-          selectedY: numericCols[0]?.name || headers[1] || headers[0],
-        });
+          const numericCols = metadata.filter(m => m.type === 'number');
+          const stringCols = metadata.filter(m => m.type === 'string');
+
+          setData({
+            fileName: file.name,
+            headers,
+            rows,
+            metadata,
+            selectedX: stringCols[0]?.name || headers[0],
+            selectedY: numericCols[0]?.name || headers[1] || headers[0],
+          });
+        }
+      } catch (error) {
+        console.error("Error processing file:", error);
+        alert("Lỗi khi đọc file Excel. Vui lòng kiểm tra lại định dạng file.");
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,32 +180,52 @@ export default function App() {
     }
   };
 
+  // --- Helper for Robust Column Detection ---
+  const findColumn = useCallback((targets: string[]) => {
+    if (!data) return null;
+    
+    // Chuẩn hóa chuỗi: viết thường, bỏ dấu tiếng Việt, bỏ khoảng trắng/kí tự đặc biệt
+    const normalize = (s: string) => 
+      s.toLowerCase()
+       .normalize("NFD")
+       .replace(/[\u0300-\u036f]/g, "")
+       .replace(/[\s\-_/\\\(\)\[\]\.]/g, "");
+
+    const cleanTargets = targets.map(normalize);
+    
+    // Tìm khớp tuyệt đối trước
+    for (const target of cleanTargets) {
+      const found = data.headers.find(h => normalize(h) === target);
+      if (found) return found;
+    }
+    
+    // Nếu không thấy tuyệt đối, tìm khớp theo kiểu chứa chuỗi (contains)
+    for (const target of cleanTargets) {
+      const found = data.headers.find(h => normalize(h).includes(target) || target.includes(normalize(h)));
+      if (found) return found;
+    }
+
+    return null;
+  }, [data]);
+
   // --- Data Analysis for Overview ---
 
   const metrics = useMemo(() => {
     if (!data) return null;
     
-    // Helper to find column by name (case-insensitive and handling spaces)
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
-
-    const idHdonCol = findCol('id_hdon');
-    const maKhangCol = findCol('ma_khang');
-    const manhomKhCol = findCol('manhom_kh');
-    const tongTienCol = findCol('tổng tiền');
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'mã khách hàng']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien', 'thành tiền']);
 
     const result: { label: string; value: string; trend?: number; icon: any }[] = [];
 
-    // 1. Tổng số hóa đơn (Record count)
+    // 1. Tổng số hóa đơn
     result.push({
       label: 'Tổng số hóa đơn',
       value: data.rows.length.toLocaleString(),
       icon: TableIcon
     });
 
-    // 2. Tổng khách hàng (Unique ma_khang)
+    // 2. Tổng khách hàng
     if (maKhangCol) {
       const uniqueCustomers = new Set(data.rows.map(r => r[maKhangCol]?.toString()).filter(Boolean));
       result.push({
@@ -212,7 +235,7 @@ export default function App() {
       });
     }
 
-    // 3. Tổng Tiền (from tổng tiền)
+    // 3. Tổng Tiền
     if (tongTienCol) {
       const sum = data.rows.reduce((acc, row) => acc + (Number(row[tongTienCol]) || 0), 0);
       result.push({
@@ -223,9 +246,9 @@ export default function App() {
     }
 
     // Fallback if specific columns not found
-    if (result.length === 0) {
+    if (result.length <= 1) {
       const numericCols = data.metadata.filter(m => m.type === 'number');
-      numericCols.slice(0, 3).forEach((col, idx) => {
+      numericCols.slice(0, 3).forEach((col) => {
         const sum = data.rows.reduce((acc, row) => acc + (Number(row[col.name]) || 0), 0);
         result.push({
           label: `Tổng ${col.name}`,
@@ -236,11 +259,11 @@ export default function App() {
     }
 
     return result;
-  }, [data]);
+  }, [data, findColumn]);
 
   const khDistribution = useMemo(() => {
     if (!data) return [];
-    const col = data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === 'manhom_kh');
+    const col = findColumn(['manhom_kh', 'nhóm kh', 'nhomkh', 'mã nhóm']);
     if (!col) return [];
 
     const counts: Record<string, number> = {};
@@ -250,7 +273,7 @@ export default function App() {
     });
 
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [data]);
+  }, [data, findColumn]);
 
   // --- Rendering Functions ---
   const renderSidebar = () => (
@@ -408,21 +431,39 @@ export default function App() {
     </div>
   );
 
+  const saveAsExcel = (workbook: XLSX.WorkBook, fileName: string) => {
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 0);
+  };
+
   const exportTermData = (term: number) => {
     if (!data) return;
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
+    const findCol = (targets: string[]) => {
+      for (const t of targets) {
+        const lowerT = t.toLowerCase().replace(/\s/g, '').replace(/_/g, '');
+        const found = data.headers.find(h => h.toLowerCase().replace(/\s/g, '').replace(/_/g, '') === lowerT);
+        if (found) return found;
+      }
+      return null;
     };
 
-    const maKhangCol = findCol('ma_khang');
+    const maKhangCol = findCol(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'mã khách hàng']);
     if (!maKhangCol) {
-      alert("Không tìm thấy cột ma_khang để lọc dữ liệu.");
+      alert("Không tìm thấy cột thông tin Mã khách hàng để lọc dữ liệu.");
       return;
     }
 
-    // 1. Identify customers with this term count
     const customerCounts: Record<string, number> = {};
     data.rows.forEach(row => {
       const id = row[maKhangCol]?.toString();
@@ -430,8 +471,6 @@ export default function App() {
     });
 
     const targetCustomerIds = new Set(Object.keys(customerCounts).filter(id => customerCounts[id] === term));
-
-    // 2. Filter original data for these customers
     const filteredRows = data.rows.filter(row => targetCustomerIds.has(row[maKhangCol]?.toString()));
 
     if (filteredRows.length === 0) {
@@ -439,24 +478,27 @@ export default function App() {
       return;
     }
 
-    // 3. Export to Excel
     const worksheet = XLSX.utils.json_to_sheet(filteredRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, `Chi tiết ${term} kỳ`);
-    XLSX.writeFile(workbook, `khach_hang_no_${term}_ky.xlsx`);
+    saveAsExcel(workbook, `khach_hang_no_${term}_ky.xlsx`);
   };
 
   const exportThoaiHoanData = () => {
     if (!data) return;
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
+    const findCol = (targets: string[]) => {
+      for (const t of targets) {
+        const lowerT = t.toLowerCase().replace(/\s/g, '').replace(/_/g, '');
+        const found = data.headers.find(h => h.toLowerCase().replace(/\s/g, '').replace(/_/g, '') === lowerT);
+        if (found) return found;
+      }
+      return null;
     };
 
-    const tongTienCol = findCol('tổng tiền');
+    const tongTienCol = findCol(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien']);
     if (!tongTienCol) {
-      alert("Không tìm thấy cột tổng tiền để lọc dữ liệu.");
+      alert("Không tìm thấy cột Tổng tiền để lọc dữ liệu.");
       return;
     }
 
@@ -470,7 +512,7 @@ export default function App() {
     const worksheet = XLSX.utils.json_to_sheet(filteredRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Khach hang thoai hoan");
-    XLSX.writeFile(workbook, "khach_hang_thoai_hoan.xlsx");
+    saveAsExcel(workbook, "khach_hang_thoai_hoan.xlsx");
   };
 
   const parseDateValue = (val: any) => {
@@ -483,25 +525,18 @@ export default function App() {
     }
 
     const str = String(val).trim();
-    
-    // 1. Try manual parsing for DD/MM/YYYY or DD/MM/YY (highest priority)
     const parts = str.split(/[\/\-]/);
     if (parts.length === 3) {
       const d = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10);
       let y = parseInt(parts[2], 10);
-      
-      // Handle 2-digit years (e.g., "25" -> 2025)
       if (y < 100) y += 2000;
-      
       const dateObj = new Date(y, m - 1, d);
-      // Verify the date is valid and meaningful
       if (!isNaN(dateObj.getTime()) && dateObj.getFullYear() === y && dateObj.getMonth() === m - 1) {
         return dateObj;
       }
     }
 
-    // 2. Fallback to native parsing for other formats
     const nativeDate = new Date(str);
     if (!isNaN(nativeDate.getTime())) {
       return new Date(nativeDate.getFullYear(), nativeDate.getMonth(), nativeDate.getDate());
@@ -513,16 +548,20 @@ export default function App() {
   const exportNoKhoDoiData = () => {
     if (!data) return;
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
+    const findCol = (targets: string[]) => {
+      for (const t of targets) {
+        const lowerT = t.toLowerCase().replace(/\s/g, '').replace(/_/g, '');
+        const found = data.headers.find(h => h.toLowerCase().replace(/\s/g, '').replace(/_/g, '') === lowerT);
+        if (found) return found;
+      }
+      return null;
     };
 
-    const ngayPhCol = findCol('ngay_phanh') || findCol('ngay_ph_hdon') || findCol('ngay_hd') || findCol('ngay_ct') || findCol('invoice_date') || findCol('ngày phát hành');
-    const tongTienCol = findCol('tổng tiền');
+    const ngayPhCol = findCol(['ngay_phanh', 'ngayphanh', 'ngay_ph_hdon', 'ngay_hd', 'ngày phát hành', 'ngày hd']);
+    const tongTienCol = findCol(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien']);
 
     if (!ngayPhCol || !tongTienCol) {
-      alert("Không tìm thấy cột ngày phát hành (NGAY_PHANH) hoặc tổng tiền để lọc dữ liệu.");
+      alert("Không tìm thấy cột Ngày phát hành hoặc Tổng tiền để lọc dữ liệu.");
       return;
     }
 
@@ -532,7 +571,6 @@ export default function App() {
     const resultWithDays = data.rows.map(row => {
       const date = parseDateValue(row[ngayPhCol]);
       if (!date) return { row, diffDays: -1 };
-      
       const diffMs = d1.getTime() - date.getTime();
       const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
       return { row, diffDays };
@@ -556,7 +594,7 @@ export default function App() {
     const worksheet = XLSX.utils.json_to_sheet(filteredData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "No Kho Doi");
-    XLSX.writeFile(workbook, "khach_hang_no_kho_doi.xlsx");
+    saveAsExcel(workbook, "khach_hang_no_kho_doi.xlsx");
   };
 
   const handleExport = () => {
@@ -564,7 +602,7 @@ export default function App() {
     const worksheet = XLSX.utils.json_to_sheet(data.rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Báo cáo tổng hợp");
-    XLSX.writeFile(workbook, "bao_cao_tong_hop.xlsx");
+    saveAsExcel(workbook, "bao_cao_tong_hop.xlsx");
   };
 
   const renderOverview = () => {
@@ -734,102 +772,107 @@ export default function App() {
                       onClick={exportNoKhoDoiData}
                       className="flex items-center gap-2 px-3 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-xl text-[10px] font-bold uppercase hover:bg-orange-600 hover:text-white transition shadow-sm"
                     >
-                      <Download className="w-3 h-3" />
-                      Tải danh sách
-                    </button>
+                      <Download className="w-3 h-3" />                Tải DS                    </button>
                   </div>
                 </div>
               </div>
             </div>
-            {/* Phân Tích Nợ Nhiều Kỳ */}
-            <div>
-          <p  className="text-3xl font-bold tracking-tight text-slate-900 italic uppercase">Phân Tích Nợ Chi Tiết</p>
-                 </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-separate border-spacing-0">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Kỳ nợ</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số KH</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Số HĐ</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Tiền Nợ (đ)</th>
-                    <th className="px-6 py-4 text-left font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Ghi Chú</th>
-                    <th className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-[10px] tracking-widest border-b border-slate-200">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedData.map((row, idx) => {
-                    const total = row.toChuc + row.caNhan;
-                    const pTC = total > 0 ? (row.toChuc / total) * 100 : 0;
-                    
-                    return (
-                      <tr key={idx} className="group hover:bg-blue-50/50 transition-all duration-300">
-                        <td className="px-6 py-5 border-b border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-slate-900">{row.label}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
-                          {row.customers.toLocaleString()} KH
-                        </td>
-                        <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-medium text-slate-600">
-                          {row.invoices.toLocaleString()} HĐ
-                        </td>
-                        <td className="px-6 py-5 border-b border-slate-50 text-right tabular-nums font-black text-slate-900">
-                          {row.amount.toLocaleString()} đ
-                        </td>
-                        <td className="px-6 py-5 border-b border-slate-50 text-left">
-                          <div className="flex items-center gap-3">
-                            <div 
-                              className="w-10 h-10 rounded-full border border-slate-200 shadow-inner relative overflow-hidden" 
-                              style={{
-                                background: `conic-gradient(#3b82f6 0% ${pTC}%, #f97316 ${pTC}% 100%)`
-                              }}
-                            />
-                            <div className="flex flex-col text-[10px] font-bold leading-tight">
-                              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
-                                <span className="text-slate-400 uppercase tracking-tighter">TC:</span>
-                                <span className="text-blue-600">{pTC.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]" />
-                                <span className="text-slate-400 uppercase tracking-tighter">CN:</span>
-                                <span className="text-orange-600">{(100 - pTC).toFixed(1)}%</span>
-                              </div>
+            <div className="pt-10 border-t border-slate-100">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 italic uppercase">Phân Tích Nợ Chi Tiết</h3>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 border-b border-slate-50 text-right">
-                          <button 
-                            onClick={() => exportTermData(row.term)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase hover:bg-blue-600 transition-all shadow-sm active:scale-95 translate-y-0 hover:-translate-y-0.5"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            Xuất Data
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {groupedData.length > 0 && (
-                    <tr className="bg-black text-white shadow-xl">
-                      <td className="px-6 py-6 border-b border-slate-900 font-black uppercase text-[10px] tracking-[0.2em] italic">Tổng cộng</td>
-                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
-                        {groupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()} KH
-                      </td>
-                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-bold">
-                        {groupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()} HĐ
-                      </td>
-                      <td className="px-6 py-6 border-b border-slate-900 text-right tabular-nums font-black text-lg">
-                        {groupedData.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} đ
-                      </td>
-                      <td className="px-6 py-6 border-b border-slate-900"></td>
-                      <td className="px-6 py-6 border-b border-slate-900"></td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              </div>
+
+              <div className="bg-slate-50/50 rounded-[2.5rem] p-4 border border-slate-100 shadow-inner">
+                <div className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-separate border-spacing-0">
+                      <thead>
+                        <tr className="bg-slate-900">
+                          <th className="px-8 py-5 text-left font-black text-white uppercase text-[10px] tracking-[0.2em] italic border-r border-white/10">Số Kỳ</th>
+                          <th className="px-6 py-5 text-right font-black text-white uppercase text-[10px] tracking-[0.2em] italic border-r border-white/10">Khách Hàng</th>
+                          <th className="px-6 py-5 text-right font-black text-white uppercase text-[10px] tracking-[0.2em] italic border-r border-white/10">Hóa Đơn</th>
+                          <th className="px-6 py-5 text-right font-black text-white uppercase text-[10px] tracking-[0.2em] italic border-r border-white/10">Tiền Nợ</th>
+                          <th className="px-6 py-5 text-center font-black text-white uppercase text-[10px] tracking-[0.2em] italic border-r border-white/10">Cơ Cấu TC/CN</th>
+                          <th className="px-6 py-5 text-right font-black text-white uppercase text-[10px] tracking-[0.2em] italic">Dữ Liệu</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {fullGroupedData.map((row, idx) => {
+                          const total = row.toChuc + row.caNhan;
+                          const pTC = total > 0 ? (row.toChuc / total) * 100 : 0;
+                          
+                          return (
+                            <tr key={idx} className="group hover:bg-indigo-50/40 transition-all duration-300">
+                              <td className="px-8 py-6 font-black text-slate-900 border-r border-slate-50">
+                                <div className="flex items-center gap-3">
+                                  <span className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">{row.term}</span>
+                                  <span className="uppercase italic tracking-tight">{row.label}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-6 text-right tabular-nums font-bold text-slate-600 border-r border-slate-50">
+                                {row.customers.toLocaleString()} <span className="text-[10px] text-slate-400 font-medium"></span>
+                              </td>
+                              <td className="px-6 py-6 text-right tabular-nums font-bold text-slate-600 border-r border-slate-50">
+                                {row.invoices.toLocaleString()} <span className="text-[10px] text-slate-400 font-medium"></span>
+                              </td>
+                              <td className="px-6 py-6 text-right tabular-nums font-black text-indigo-700 text-base border-r border-slate-50">
+                                {row.amount.toLocaleString()} đ
+                              </td>
+                              <td className="px-6 py-6 border-r border-slate-50">
+                                <div className="flex items-center justify-center gap-4">
+                                  <div className="flex flex-col items-end min-w-[60px]">
+                                    <span className="text-[10px] font-bold text-blue-600">TC: {row.toChuc}</span>
+                                    <span className="text-[10px] font-black text-slate-400">{pTC.toFixed(0)}%</span>
+                                  </div>
+                                  <div 
+                                    className="w-10 h-10 rounded-full shadow-sm relative overflow-hidden flex-shrink-0 border-2 border-white" 
+                                    style={{
+                                      background: `conic-gradient(#2563eb 0% ${pTC}%, #f97316 ${pTC}% 100%)`
+                                    }}
+                                  />
+                                  <div className="flex flex-col items-start min-w-[60px]">
+                                    <span className="text-[10px] font-bold text-orange-600">CN: {row.caNhan}</span>
+                                    <span className="text-[10px] font-black text-slate-400">{(100 - pTC).toFixed(0)}%</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-6 text-right">
+                                <button 
+                                  onClick={() => exportTermData(row.term)}
+                                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                                >
+                                  <Download className="w-3.5 h-3.5" />    Tải DS
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {fullGroupedData.length > 0 && (
+                          <tr className="bg-indigo-600 text-white">
+                            <td className="px-8 py-6 font-black uppercase text-[11px] tracking-[0.2em] italic">Tổng Cộng</td>
+                            <td className="px-6 py-6 text-right tabular-nums font-bold">
+                              {fullGroupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()} 
+                            </td>
+                            <td className="px-6 py-6 text-right tabular-nums font-bold">
+                              {fullGroupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()} 
+                            </td>
+                            <td className="px-6 py-6 text-right tabular-nums font-black text-xl">
+                              {fullGroupedData.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} 
+                            </td>
+                            <td className="px-6 py-6"></td>
+                            <td className="px-6 py-6"></td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -878,11 +921,96 @@ export default function App() {
 
             
 
-            {/* Dashboard Chart for Filtered Data */}
+            {/* Dashboard Chart and Table for Filtered Data */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                             
             </div>
 
+            {/* Phân tích nợ theo phiên đã chọn (Now at the top) */}
+            {selectedPhien !== 'all' && groupedData.length > 0 && (
+              <div className="mt-12 space-y-6">
+                <div className="flex items-center gap-3 px-2">
+                  <div className="w-10 h-10 bg-[#0f172a] rounded-xl flex items-center justify-center shadow-lg shadow-slate-200">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 leading-none">Phân Tích Nợ Theo (Phiên {selectedPhien})</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Tổng hợp thống kê chi tiết theo từng nhóm kỳ</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden mb-12">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-separate border-spacing-0">
+                      <thead className="bg-[#0f172a]">
+                        <tr>
+                          <th className="px-6 py-5 text-left font-black text-white uppercase text-[10px] tracking-widest">SỐ KỲ</th>
+                          <th className="px-6 py-3 text-right font-black text-white uppercase text-[10px] tracking-widest">KHÁCH HÀNG</th>
+                          <th className="px-6 py-3 text-right font-black text-white uppercase text-[10px] tracking-widest">HÓA ĐƠN</th>
+                          <th className="px-6 py-3 text-right font-black text-white uppercase text-[10px] tracking-widest">TIỀN NỢ</th>
+                          <th className="px-6 py-3 text-center font-black text-white uppercase text-[10px] tracking-widest">DỮ LIỆU</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {groupedData.map((row, idx) => {
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50 transition-all">
+                              <td className="px-6 py-5">
+                                <div className="flex items-center gap-4">
+                                  <span className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-indigo-100">
+                                    {row.term}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-5 text-right font-bold text-slate-700 text-lg tabular-nums">
+                                {row.customers.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-5 text-right font-bold text-slate-500 tabular-nums">
+                                {row.invoices.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                <span className="font-black text-indigo-700 text-xl tabular-nums">
+                                  {row.amount.toLocaleString()} đ
+                                </span>
+                              </td>
+                              <td className="px-6 py-5 text-center">
+                                <button 
+                                  onClick={() => exportTermData(row.term)}
+                                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-800 rounded-2xl text-[10px] font-black uppercase hover:bg-[#0f172a] hover:text-white transition-all shadow-sm active:scale-95"
+                                >
+                                  <Download className="w-4 h-4" /> TẢI DS
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {groupedData.length > 0 && (
+                          <tr className="bg-slate-900 font-black text-white">
+                            <td className="px-6 py-5 rounded-bl-2xl">
+                              <span className="italic uppercase text-base tracking-widest">TỔNG CỘNG</span>
+                            </td>
+                            <td className="px-6 py-5 text-right text-lg tabular-nums">
+                              {groupedData.reduce((acc, curr) => acc + curr.customers, 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-5 text-right text-slate-300 tabular-nums">
+                              {groupedData.reduce((acc, curr) => acc + curr.invoices, 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-5 text-right text-indigo-400 text-xl tabular-nums">
+                              {groupedData.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} đ
+                            </td>
+                            <td className="px-6 py-5 rounded-br-2xl text-center">
+                              <span className="text-[10px] text-slate-500 uppercase tracking-widest leading-none">Toàn phiên {selectedPhien}</span>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Danh sách chi tiết (Now below) */}
             {selectedPhien !== 'all' && (
               <div className="mt-12 space-y-6">
                 <div className="flex items-center justify-between px-2">
@@ -906,14 +1034,14 @@ export default function App() {
                     <table className="w-full text-xs border-separate border-spacing-0">
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-slate-50 shadow-sm">
-                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">ID HĐ</th>
                           <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Mã KH</th>
                           <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Tên Khách Hàng</th>
                           <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Kỳ</th>
                           <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Tháng</th>
                           <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Năm</th>
                           <th className="px-5 py-4 text-right font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">Tổng Tiền</th>
-                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 whitespace-nowrap">Ngày Phát Hành</th>
+                          <th className="px-5 py-4 text-left font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 whitespace-nowrap">Ngày PH</th>
+                          <th className="px-5 py-4 text-center font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 whitespace-nowrap">Số Ngày Quá Hạn</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -926,8 +1054,7 @@ export default function App() {
 
                           return (
                             <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
-                              <td className="px-5 py-3.5 font-mono text-slate-500 group-hover:text-indigo-600 transition-colors">{find('id_hdon')?.toString() || '-'}</td>
-                              <td className="px-5 py-3.5 font-bold text-slate-900">{find('ma_khang')?.toString() || '-'}</td>
+                               <td className="px-5 py-3.5 font-bold text-slate-900">{find('ma_khang')?.toString() || '-'}</td>
                               <td className="px-5 py-3.5 font-medium text-slate-600 max-w-[200px] truncate">{find('ten_khang')?.toString() || '-'}</td>
                               <td className="px-5 py-3.5 text-center font-bold text-slate-700 bg-slate-50/50">{find('ky')?.toString() || '-'}</td>
                               <td className="px-5 py-3.5 text-center font-bold text-slate-700">{find('thang')?.toString() || '-'}</td>
@@ -937,6 +1064,36 @@ export default function App() {
                               </td>
                               <td className="px-5 py-3.5 font-medium text-slate-500 whitespace-nowrap">
                                 {find('ngay_phanh')?.toString() || '-'}
+                              </td>
+                              <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                {(() => {
+                                  const maKH = find('ma_khang')?.toString();
+                                  const date = maKH ? customerOldestDateMap.get(maKH) : null;
+                                  
+                                  if (!date) return <span className="text-slate-300">-</span>;
+                                  
+                                  const today = new Date(2026, 3, 22); // 22/04/2026
+                                  const diffTime = today.getTime() - date.getTime();
+                                  const diffDaysReal = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                  const diffDays = diffDaysReal - 5;
+                                  
+                                  if (diffDays > 0) {
+                                    return (
+                                      <div className="flex flex-col items-center">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-red-50 text-red-600 border border-red-100">
+                                          {diffDays} ngày
+                                        </span>
+                                        
+                                      </div>
+                                    );
+                                  } else {
+                                    return (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                        chưa tới hạn
+                                      </span>
+                                    );
+                                  }
+                                })()}
                               </td>
                             </tr>
                           );
@@ -957,57 +1114,31 @@ export default function App() {
           </div>
         </div>
 
-        {/* Toàn bộ dữ liệu overview charts section can go here if needed, or keeping it clean */}
-        <div className="pt-8 border-t border-slate-100">
-           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Tổng Hợp Toàn Bộ Dữ Liệu</h3>
-           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Phân Bổ Nợ Theo Kỳ (Tổng)</h3>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={fullGroupedData.slice().reverse()}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
-                    formatter={(value: any) => [Number(value).toLocaleString() + ' đ', 'Tiền Nợ']}
-                  />
-                  <Bar dataKey="amount" radius={[6, 6, 0, 0]} fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Cơ Cấu Khách Hàng Nợ (Tổng)</h3>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Tổ Chức', value: fullGroupedData.reduce((acc, curr) => acc + curr.toChuc, 0) },
-                      { name: 'Cá Nhân', value: fullGroupedData.reduce((acc, curr) => acc + curr.caNhan, 0) }
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    <Cell fill="#3b82f6" />
-                    <Cell fill="#f97316" />
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
-                  />
-                  <Legend verticalAlign="bottom" align="center" height={36}/>
-                </PieChart>
-              </ResponsiveContainer>
-                          </div>
-          </div>
-        </div>
       </div>
     );
   };
+
+  // --- Helper for Customer Oldest Date ---
+  const customerOldestDateMap = useMemo(() => {
+    if (!data) return new Map<string, Date>();
+    const map = new Map<string, Date>();
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'ma kh']);
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
+    
+    if (!maKhangCol || !ngayPhCol) return map;
+
+    data.rows.forEach(row => {
+      const maKH = row[maKhangCol]?.toString();
+      const date = parseDateValue(row[ngayPhCol]);
+      if (maKH && date) {
+        const currentOldest = map.get(maKH);
+        if (!currentOldest || date < currentOldest) {
+          map.set(maKH, date);
+        }
+      }
+    });
+    return map;
+  }, [data, findColumn]);
 
   const renderDataView = () => {
     if (!data) return null;
@@ -1060,12 +1191,7 @@ export default function App() {
   const baseFilteredRows = useMemo(() => {
     if (!data) return [];
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
-
-    const maSoCol = findCol('ma_sogcs') || findCol('mã sổ') || findCol('maso') || findCol('ma_so');
+    const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
     
     return data.rows.filter(row => {
       if (selectedPhien === 'all') return true;
@@ -1089,28 +1215,20 @@ export default function App() {
       }
       return true;
     });
-  }, [data, selectedPhien]);
+  }, [data, selectedPhien, findColumn]);
 
   // --- Data Analysis for Grouped View (Phân tích Số Kỳ Nợ) ---
 
   const groupedData = useMemo(() => {
     if (!data || baseFilteredRows.length === 0) return [];
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'ma kh']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'tien_no', 'so tien', 'tong_no']);
+    const manhomKhCol = findColumn(['manhom_kh', 'mã nhóm', 'nhomkh', 'ma_nhom_kh', 'nhom kh']);
+    const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh', 'loai', 'phan_loai', 'tc_cn', 'dt_kh', 'loai kh', 'loai khang']);
 
-    const maKhangCol = findCol('ma_khang');
-    const tongTienCol = findCol('tổng tiền');
-    const manhomKhCol = findCol('manhom_kh');
-    const loaiKhCol = findCol('loại_khang') || findCol('loaikh') || findCol('loai_khang');
+    if (!maKhangCol || !tongTienCol) return [];
 
-    if (!maKhangCol || !tongTienCol) {
-      return [];
-    }
-
-    // 1. Đếm số lần xuất hiện của mỗi khách hàng (Số kỳ nợ)
     const customerStats: Record<string, { count: number; totalAmount: number; notes: Set<string>; loaiKhang: string }> = {};
     baseFilteredRows.forEach(row => {
       const id = row[maKhangCol]?.toString();
@@ -1127,13 +1245,12 @@ export default function App() {
       if (note) customerStats[id].notes.add(note);
     });
 
-    // 2. Gom nhóm theo số kỳ (1 kỳ, 2 kỳ, ...)
     const termGroups: Record<number, { label: string; amount: number; customers: number; invoices: number; notes: string[]; term: number; toChuc: number; caNhan: number }> = {};
     Object.values(customerStats).forEach(stat => {
       const termCount = stat.count;
       if (!termGroups[termCount]) {
         termGroups[termCount] = { 
-          label: `${termCount} Kỳ`, 
+          label: `${termCount}`, 
           term: termCount,
           amount: 0, 
           customers: 0, 
@@ -1148,10 +1265,16 @@ export default function App() {
       g.customers += 1;
       g.invoices += termCount;
       
-      const loai = stat.loaiKhang?.toString().toLowerCase().trim();
-      if (loai === '1' || loai === 'tổng công ty' || loai === 'tổ chức') g.toChuc += 1;
-      else if (loai === '0' || loai === 'cá nhân' || loai === 'ca nhan') g.caNhan += 1;
-      else g.caNhan += 1; // Default to individual if unclear
+      const loaiRaw = stat.loaiKhang?.toString().toLowerCase().trim() || '';
+      // Nhận diện cực rộng: Số 1, TC, Tổ chức, Tổng công ty, Doanh nghiệp...
+      const isToChuc = loaiRaw === '1' || 
+                       loaiRaw.includes('tc') || 
+                       loaiRaw.includes('to chuc') || 
+                       loaiRaw.includes('tong cong ty') ||
+                       loaiRaw.includes('doanh nghiep');
+                       
+      if (isToChuc) g.toChuc += 1;
+      else g.caNhan += 1;
 
       stat.notes.forEach(n => {
         if (!g.notes.includes(n)) g.notes.push(n);
@@ -1159,20 +1282,15 @@ export default function App() {
     });
 
     return Object.values(termGroups).sort((a, b) => b.term - a.term);
-  }, [data, baseFilteredRows]);
+  }, [data, baseFilteredRows, findColumn]);
 
   const fullGroupedData = useMemo(() => {
     if (!data) return [];
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
-
-    const maKhangCol = findCol('ma_khang');
-    const tongTienCol = findCol('tổng tiền');
-    const manhomKhCol = findCol('manhom_kh');
-    const loaiKhCol = findCol('loại_khang') || findCol('loaikh') || findCol('loai_khang');
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'ma kh']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'tien_no', 'tong_no']);
+    const manhomKhCol = findColumn(['manhom_kh', 'mã nhóm', 'nhomkh', 'ma_nhom_kh']);
+    const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh', 'loai', 'phan_loai', 'tc_cn', 'dt_kh', 'loai kh', 'tc cn']);
 
     if (!maKhangCol || !tongTienCol) return [];
 
@@ -1197,7 +1315,7 @@ export default function App() {
       const termCount = stat.count;
       if (!termGroups[termCount]) {
         termGroups[termCount] = { 
-          label: `${termCount} Kỳ`, 
+          label: `${termCount}`, 
           term: termCount,
           amount: 0, 
           customers: 0, 
@@ -1212,29 +1330,29 @@ export default function App() {
       g.customers += 1;
       g.invoices += termCount;
       
-      const loai = stat.loaiKhang?.toString().toLowerCase().trim();
-      if (loai === '1' || loai === 'tổng công ty' || loai === 'tổ chức') g.toChuc += 1;
+      const loaiRaw = stat.loaiKhang?.toString().toLowerCase().trim() || '';
+      const isToChuc = loaiRaw === '1' || 
+                       loaiRaw.includes('tc') || 
+                       loaiRaw.includes('to chuc') || 
+                       loaiRaw.includes('tong cong ty') ||
+                       loaiRaw.includes('doanh nghiep');
+                       
+      if (isToChuc) g.toChuc += 1;
       else g.caNhan += 1;
     });
 
     return Object.values(termGroups).sort((a, b) => b.term - a.term);
-  }, [data]);
+  }, [data, findColumn]);
 
   const badDebtMonthlyData = useMemo(() => {
     if (!data) return [];
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
-
-    const ngayPhCol = findCol('ngay_phanh') || findCol('ngay_ph_hdon') || findCol('ngay_hd') || findCol('ngay_ct') || findCol('invoice_date') || findCol('ngày phát hành');
-    const tongTienCol = findCol('tổng tiền');
-    const idHdonCol = findCol('id_hdon') || 'id_hdon';
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien']);
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const now = new Date(2026, 3, 20); // Fixed report date: 20/04/2026
+    const now = new Date(2026, 3, 20); 
     const monthlyGroups: Record<string, { month: string; count: number; totalAmount: number; sortKey: number }> = {};
 
     data.rows.forEach(row => {
@@ -1261,23 +1379,18 @@ export default function App() {
     });
 
     return Object.values(monthlyGroups).sort((a, b) => b.sortKey - a.sortKey);
-  }, [data]);
+  }, [data, findColumn]);
 
   const badDebtTypeStats = useMemo(() => {
     if (!data) return [];
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
-
-    const ngayPhCol = findCol('ngay_phanh') || findCol('ngay_ph_hdon') || findCol('ngay_hd') || findCol('ngay_ct') || findCol('invoice_date') || findCol('ngày phát hành');
-    const tongTienCol = findCol('tổng tiền');
-    const loaiKhCol = findCol('loai_khang') || findCol('loaikh') || findCol('loại_khang');
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien']);
+    const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh']);
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const now = new Date(2026, 3, 20); // Fixed report date: 20/04/2026
+    const now = new Date(2026, 3, 20); 
     let toChucAmount = 0;
     let caNhanAmount = 0;
     let toChucInvoices = 0;
@@ -1293,7 +1406,7 @@ export default function App() {
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays > 177 && amount > 0) {
-          if (loai === '1') {
+          if (loai === '1' || loai === 'tổ chức' || loai === 'tc') {
             toChucAmount += amount;
             toChucInvoices += 1;
           } else {
@@ -1305,22 +1418,17 @@ export default function App() {
     });
 
     return [
-      { name: 'Cá Nhân', value: caNhanAmount, invoices: caNhanInvoices, color: '#ef4444' }, // Red-500
-      { name: 'Tổ Chức', value: toChucAmount, invoices: toChucInvoices, color: '#3b82f6' }  // Blue-500
+      { name: 'Cá Nhân', value: caNhanAmount, invoices: caNhanInvoices, color: '#ef4444' }, 
+      { name: 'Tổ Chức', value: toChucAmount, invoices: toChucInvoices, color: '#3b82f6' }  
     ].filter(i => i.invoices > 0);
-  }, [data]);
+  }, [data, findColumn]);
 
   const phienData = useMemo(() => {
     if (!data) return null;
 
-    const findCol = (name: string) => {
-      const lower = name.toLowerCase().replace(/\s/g, '');
-      return data.headers.find(h => h.toLowerCase().replace(/\s/g, '') === lower);
-    };
-
-    const maSoCol = findCol('ma_sogcs') || findCol('mã sổ') || findCol('maso') || findCol('ma_so');
-    const tongTienCol = findCol('tổng tiền');
-    const maKhangCol = findCol('ma_khang');
+    const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền']);
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh']);
 
     if (!maSoCol || !tongTienCol) return null;
 
@@ -1335,15 +1443,14 @@ export default function App() {
     };
 
     const thoaiHoanCustomerIds = new Set<string>();
-    const ngayPhCol = findCol('ngay_phanh') || findCol('ngay_ph_hdon') || findCol('ngay_hd') || findCol('ngay_ct') || findCol('invoice_date') || findCol('ngày phát hành');
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
     
-    const now = new Date(2026, 3, 20); // Fixed report date: 20/04/2026
+    const now = new Date(2026, 3, 20); 
     
     data.rows.forEach(row => {
       const maSo = row[maSoCol]?.toString() || '';
       const amount = Number(row[tongTienCol]) || 0;
       const maKhang = maKhangCol ? row[maKhangCol]?.toString() : null;
-      const idHdon = row[findCol('id_hdon') || 'id_hdon']?.toString();
 
       if (maSo.startsWith('20')) {
         stats.phien20.hd += 1;
@@ -1355,7 +1462,6 @@ export default function App() {
         stats.phien3.hd += 1;
         stats.phien3.tien += amount;
       } else {
-        // Tất cả các mã khác (không bắt đầu bằng 20, B2, B3) thì gom hết vào B1
         stats.phien1.hd += 1;
         stats.phien1.tien += amount;
       }
@@ -1365,7 +1471,6 @@ export default function App() {
         stats.thoaiHoan.tien += amount;
       }
 
-      // Nợ khó đòi logic: (Ngày hiện tại - NGAY_PHANH) > 177 ngày
       if (ngayPhCol) {
         const date = parseDateValue(row[ngayPhCol]);
         if (date) {
@@ -1386,7 +1491,7 @@ export default function App() {
     stats.thoaiHoan.customers = thoaiHoanCustomerIds.size;
 
     return stats;
-  }, [data]);
+  }, [data, findColumn]);
 
   const renderChartsView = () => {
     if (!data || !phienData) return null;
