@@ -79,8 +79,8 @@ const COLORS = ['#1a1a1a', '#4a4a4a', '#8e8e8e', '#c1c1c1', '#f0f0f0', '#ff6b35'
 export default function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'data' | 'segmentation'>('overview');
-  const [selectedPhien, setSelectedPhien] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'data' | 'segmentation' | 'bad_debt'>('overview');
+  const [selectedPhien, setSelectedPhien] = useState<string>('20');
   const [rawSelectedPhien, setRawSelectedPhien] = useState<string>('all'); // Independent session filter for Raw Data
   const [detailSearch, setDetailSearch] = useState<string>('');
   const [appliedSearch, setAppliedSearch] = useState<string>(''); // For manual search execution
@@ -320,9 +320,10 @@ export default function App() {
       <nav className="flex-1 px-4 space-y-1">
         {[
           { id: 'overview', label: 'Tổng Quát', icon: BarChart3 },
-          { id: 'segmentation', label: 'Phân Tích', icon: Layers },
-          { id: 'charts', label: 'Nợ Khó Đòi', icon: TrendingUp },
-          { id: 'data', label: 'Tiện Ích', icon: TableIcon },
+          { id: 'segmentation', label: 'Phân Tích Phiên', icon: Layers },
+          { id: 'bad_debt', label: 'Nợ Khó Đòi', icon: AlertCircle },
+          { id: 'data', label: 'Dữ Liệu Thô', icon: TableIcon },
+          { id: 'charts', label: 'Biểu Đồ Khác', icon: PieChartIcon },
         ].map((item) => (
           <button
             key={item.id}
@@ -934,7 +935,7 @@ export default function App() {
                                 {row.invoices.toLocaleString()} <span className="text-[10px] text-slate-400 font-medium"></span>
                               </td>
                               <td className="px-6 py-6 text-right tabular-nums font-black text-indigo-700 text-base border-r border-slate-50">
-                                {row.amount.toLocaleString()} đ
+                                {row.amount.toLocaleString()} 
                               </td>
                               <td className="px-6 py-6 border-r border-slate-50">
                                 <div className="flex items-center justify-center gap-4">
@@ -993,6 +994,272 @@ export default function App() {
     );
   };
 
+  const renderBadDebtView = () => {
+    if (!data) return null;
+
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngay ph anh', 'ngày phát hành', 'ngay_ph', 'ngay ph']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien']);
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'mã khách hàng']);
+    const tenKhangCol = findColumn(['ten_khang', 'tenkhang', 'tên khách hàng', 'ten khang', 'tên kh']);
+
+    const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh', 'loai', 'phan_loai', 'tc_cn', 'dt_kh', 'loai kh', 'loai khang']);
+
+    if (!ngayPhCol || !tongTienCol) {
+      return (
+        <div className="bg-orange-50 border border-orange-200 p-8 rounded-3xl text-center">
+          <AlertCircle className="w-12 h-12 text-orange-400 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-orange-900">Không tìm thấy cột dữ liệu thời gian</h3>
+          <p className="text-orange-600 mt-2">Vui lòng kiểm tra lại file Excel (Cần cột "Ngày phát hành" hoặc "Ngay_PHanh")</p>
+        </div>
+      );
+    }
+
+    const today = new Date(2026, 3, 23); // Standard comparison date
+    const badDebtRows = data.rows.filter(row => {
+      const date = parseDateValue(row[ngayPhCol]);
+      if (!date) return false;
+      const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+      const amount = Number(row[tongTienCol]) || 0;
+      return diffDays > 177 && amount > 0;
+    }).map(row => {
+      const date = parseDateValue(row[ngayPhCol]);
+      const diffDays = date ? Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      
+      const loaiRaw = loaiKhCol ? row[loaiKhCol]?.toString().toLowerCase().trim() || '' : '';
+      const isToChuc = loaiRaw === '1' || 
+                       loaiRaw.includes('tc') || 
+                       loaiRaw.includes('to chuc') || 
+                       loaiRaw.includes('tong cong ty') ||
+                       loaiRaw.includes('doanh nghiep');
+      
+      return { ...row, _diffDays: diffDays, _isToChuc: isToChuc };
+    });
+
+    // Thống kê theo tháng phát hành
+    const monthlyStats: Record<string, { month: string; amount: number; count: number; toChuc: number; caNhan: number }> = {};
+    badDebtRows.forEach(row => {
+       const date = parseDateValue(row[ngayPhCol]);
+       if (date) {
+         const m = (date.getMonth() + 1).toString().padStart(2, '0');
+         const y = date.getFullYear();
+         const key = `${m}/${y}`;
+         if (!monthlyStats[key]) monthlyStats[key] = { month: key, amount: 0, count: 0, toChuc: 0, caNhan: 0 };
+         monthlyStats[key].amount += (Number(row[tongTienCol]) || 0);
+         monthlyStats[key].count += 1;
+         if (row._isToChuc) monthlyStats[key].toChuc += 1;
+         else monthlyStats[key].caNhan += 1;
+       }
+    });
+
+    const chartData = Object.values(monthlyStats).sort((a,b) => {
+      const [m1, y1] = a.month.split('/').map(Number);
+      const [m2, y2] = b.month.split('/').map(Number);
+      return y1 !== y2 ? y1 - y2 : m1 - m2;
+    });
+
+    const totalAmount = badDebtRows.reduce((acc, r) => acc + (Number(r[tongTienCol]) || 0), 0);
+
+    // Grouping bad debt by customer
+    const customerBadDebt: Record<string, { id: string; name: string; count: number; amount: number }> = {};
+    badDebtRows.forEach(row => {
+      const id = row[maKhangCol || '']?.toString();
+      if (!id) return;
+      if (!customerBadDebt[id]) {
+        customerBadDebt[id] = { id, name: row[tenKhangCol || '']?.toString() || '', count: 0, amount: 0 };
+      }
+      customerBadDebt[id].count += 1;
+      customerBadDebt[id].amount += (Number(row[tongTienCol]) || 0);
+    });
+
+    const groupedCustomerData = Object.values(customerBadDebt).sort((a,b) => b.amount - a.amount);
+
+    const exportToExcel = () => {
+      const exportData = groupedCustomerData.map(row => ({
+        'Mã KH': row.id,
+        'Tên Khách Hàng': row.name,
+        'Số Hóa Đơn': row.count,
+        'Tổng Tiền Nợ': row.amount
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Tong_Hop_No_KH");
+      XLSX.writeFile(wb, `Bao_Cao_No_Kho_Doi_KH_${new Date().toLocaleDateString('vi-VN')}.xlsx`);
+    };
+
+    return (
+      <div className="space-y-8 animate-in fade-in duration-700">
+        <div className="flex items-center justify-between">
+           <div className="flex items-center gap-4">
+             <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center shadow-xl shadow-red-200">
+               <AlertCircle className="w-8 h-8 text-white" />
+             </div>
+             <div>
+               <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">Phân Tích Nợ Khó Đòi</h2>
+               <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1.5 flex items-center gap-2">
+                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                 Danh sách hóa đơn {'>'} 177 ngày chưa thanh toán
+               </p>
+             </div>
+           </div>
+           
+           <button 
+             onClick={exportToExcel}
+             className="h-12 px-8 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase hover:bg-emerald-600 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+           >
+             <FileSpreadsheet className="w-4 h-4" />
+             Xuất File Excel
+           </button>
+        </div>
+
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tổng tiền nợ</p>
+              <h3 className="text-3xl font-black text-red-600 tabular-nums">{totalAmount.toLocaleString()} đ</h3>
+              <div className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-500">
+                 <DollarSign className="w-3.5 h-3.5" />
+                 Bao gồm {badDebtRows.length.toLocaleString()} hóa đơn
+              </div>
+           </div>
+
+           <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Số KH bị ảnh hưởng</p>
+              <h3 className="text-3xl font-black text-slate-900 tabular-nums">
+                {new Set(badDebtRows.map(r => r[maKhangCol || ''])).size.toLocaleString()}
+              </h3>
+              <div className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-500">
+                 <Users className="w-3.5 h-3.5" />
+                 Mã khách hàng duy nhất
+              </div>
+           </div>
+        </div>
+
+        {/* Summary Table by Month */}
+        <div className="bg-white p-0 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
+           <div className="p-6 border-b border-slate-50 flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
+                 <TableIcon className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase italic">Tổng hợp nợ theo tháng phát hành</h4>
+           </div>
+           <div className="overflow-x-auto">
+              <table className="w-full text-sm border-separate border-spacing-0">
+                 <thead>
+                    <tr className="bg-slate-50/50">
+                       <th className="px-8 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-slate-100">Tháng</th>
+                       <th className="px-8 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-slate-100">Số HĐ</th>
+                       <th className="px-8 py-4 text-right font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-slate-100">Tổng Tiền (đ)</th>
+                       <th className="px-8 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-slate-100">Phân Loại</th>
+                    </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-50">
+                    {chartData.sort((a,b) => {
+                      const [m1, y1] = a.month.split('/').map(Number);
+                      const [m2, y2] = b.month.split('/').map(Number);
+                      return y2 !== y1 ? y2 - y1 : m2 - m1;
+                    }).map((row, idx) => {
+                      const totalKH = row.toChuc + row.caNhan;
+                      const tcPercent = totalKH > 0 ? (row.toChuc / totalKH) * 100 : 0;
+                      const cnPercent = totalKH > 0 ? (row.caNhan / totalKH) * 100 : 0;
+
+                      return (
+                       <tr key={idx} className="hover:bg-red-50/20 transition-colors">
+                          <td className="px-8 py-4 font-bold text-slate-600">Tháng {row.month}</td>
+                          <td className="px-8 py-4 text-center font-bold text-slate-900 tabular-nums">{row.count.toLocaleString()}</td>
+                          <td className="px-8 py-4 text-right font-black text-red-600 tabular-nums">{row.amount.toLocaleString()}</td>
+                          <td className="px-8 py-4">
+                             <div className="flex flex-col gap-1.5 min-w-[120px]">
+                                <div className="flex justify-between text-[9px] font-black uppercase">
+                                   <span className="text-emerald-600">TC: {row.toChuc}</span>
+                                   <span className="text-orange-600">CN: {row.caNhan}</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                                   <div style={{ width: `${tcPercent}%` }} className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
+                                   <div style={{ width: `${cnPercent}%` }} className="h-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.3)]" />
+                                </div>
+                             </div>
+                          </td>
+                       </tr>
+                      );
+                    })}
+                    <tr className="bg-red-50/30 border-t-2 border-red-100 font-black">
+                       <td className="px-8 py-5 text-red-900 uppercase text-[10px] tracking-[0.2em] italic">TỔNG CỘNG</td>
+                       <td className="px-8 py-5 text-center text-red-900 text-base tabular-nums">
+                          {chartData.reduce((acc, curr) => acc + curr.count, 0).toLocaleString()}
+                       </td>
+                       <td className="px-8 py-5 text-right text-red-700 text-lg tabular-nums">
+                          {chartData.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
+                       </td>
+                       <td className="px-8 py-5">
+                          {(() => {
+                             const totalTC = chartData.reduce((acc, curr) => acc + curr.toChuc, 0);
+                             const totalCN = chartData.reduce((acc, curr) => acc + curr.caNhan, 0);
+                             const totalAll = totalTC + totalCN;
+                             const tcP = totalAll > 0 ? (totalTC / totalAll) * 100 : 0;
+                             const cnP = totalAll > 0 ? (totalCN / totalAll) * 100 : 0;
+                             
+                             return (
+                                <div className="flex flex-col gap-1.5">
+                                   <div className="flex justify-between text-[9px] font-black uppercase">
+                                      <span className="text-emerald-700">Tổ chức: {totalTC}</span>
+                                      <span className="text-orange-700">Cá nhân: {totalCN}</span>
+                                   </div>
+                                   <div className="h-3 w-full bg-white/50 rounded-full overflow-hidden flex border border-red-200">
+                                      <div style={{ width: `${tcP}%` }} className="h-full bg-emerald-600" />
+                                      <div style={{ width: `${cnP}%` }} className="h-full bg-orange-600" />
+                                   </div>
+                                </div>
+                             );
+                          })()}
+                       </td>
+                    </tr>
+                 </tbody>
+              </table>
+           </div>
+        </div>
+
+        {/* Detailed Table */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+           <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Danh sách chi tiết hóa đơn quá hạn</h4>
+              <div className="px-4 py-1.5 bg-red-100 text-red-600 rounded-full text-[10px] font-black uppercase">
+                Hiện có {badDebtRows.length} hóa đơn
+              </div>
+           </div>
+           <div className="overflow-x-auto">
+              <table className="w-full text-sm border-separate border-spacing-0">
+                 <thead>
+                    <tr className="bg-white">
+                       <th className="px-6 py-5 text-left font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Mã KH</th>
+                       <th className="px-6 py-5 text-left font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Tên Khách Hàng</th>
+                       <th className="px-6 py-5 text-center font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Ngày PH</th>
+                       <th className="px-6 py-5 text-right font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Tiền Nợ</th>
+                    </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-50">
+                    {badDebtRows.sort((a,b) => b._diffDays - a._diffDays).slice(0, 50).map((row, idx) => (
+                       <tr key={idx} className="hover:bg-red-50/30 transition-all group">
+                          <td className="px-6 py-5 font-bold text-slate-900">{row[maKhangCol || '']?.toString()}</td>
+                          <td className="px-6 py-5 font-bold text-slate-600 uppercase italic opacity-80">{row[tenKhangCol || '']?.toString()}</td>
+                          <td className="px-6 py-5 text-center font-bold text-slate-400 tabular-nums">{row[ngayPhCol]?.toString()}</td>
+                          <td className="px-6 py-5 text-right font-black text-slate-900 tabular-nums">{(Number(row[tongTienCol]) || 0).toLocaleString()} đ</td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+           </div>
+           {badDebtRows.length > 50 && (
+             <div className="p-6 bg-slate-50 text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đang hiển thị 50 kết quả có số ngày nợ cao nhất</p>
+             </div>
+           )}
+        </div>
+      </div>
+    );
+  };
+
   const renderSegmentationView = () => {
     if (!data) return null;
     return (
@@ -1020,7 +1287,6 @@ export default function App() {
                     onChange={(e) => setSelectedPhien(e.target.value)}
                     className="w-full h-11 pl-4 pr-10 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all appearance-none cursor-pointer"
                   >
-                    <option value="all">Tất cả Phiên</option>
                     <option value="20">Phiên 20</option>
                     <option value="B2">Phiên B2</option>
                     <option value="B3">Phiên B3</option>
@@ -2081,6 +2347,7 @@ export default function App() {
               >
                 {activeTab === 'overview' && renderOverview()}
                 {activeTab === 'segmentation' && renderSegmentationView()}
+                {activeTab === 'bad_debt' && renderBadDebtView()}
                 {activeTab === 'charts' && renderChartsView()}
                 {activeTab === 'data' && renderDataView()}
               </motion.div>
