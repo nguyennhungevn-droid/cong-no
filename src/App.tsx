@@ -43,6 +43,7 @@ import {
   Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import localforage from 'localforage';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -84,7 +85,25 @@ export default function App() {
   const [detailSearch, setDetailSearch] = useState<string>('');
   const [appliedSearch, setAppliedSearch] = useState<string>(''); // For manual search execution
   const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic'); // Toggle for search logic
+  const [isLoadingPersisted, setIsLoadingPersisted] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load persisted data on mount
+  React.useEffect(() => {
+    const loadSavedData = async () => {
+      try {
+        const savedData = await localforage.getItem<DashboardData>('xcel_report_data');
+        if (savedData) {
+          setData(savedData);
+        }
+      } catch (err) {
+        console.error("Error loading saved data:", err);
+      } finally {
+        setIsLoadingPersisted(false);
+      }
+    };
+    loadSavedData();
+  }, []);
 
   // Example data to show on load
   const loadSampleData = useCallback(() => {
@@ -115,7 +134,7 @@ export default function App() {
 
   const processFile = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const dataArr = e.target?.result;
         const workbook = XLSX.read(dataArr, { type: 'array' });
@@ -145,14 +164,22 @@ export default function App() {
           const numericCols = metadata.filter(m => m.type === 'number');
           const stringCols = metadata.filter(m => m.type === 'string');
 
-          setData({
+          const newData: DashboardData = {
             fileName: file.name,
             headers,
             rows,
             metadata,
             selectedX: stringCols[0]?.name || headers[0],
             selectedY: numericCols[0]?.name || headers[1] || headers[0],
-          });
+          };
+
+          setData(newData);
+          // Save to local storage
+          try {
+            await localforage.setItem('xcel_report_data', newData);
+          } catch (err) {
+            console.error("Error saving data to local storage", err);
+          }
         }
       } catch (error) {
         console.error("Error processing file:", error);
@@ -810,13 +837,67 @@ export default function App() {
               </div>
             </div>
             <div className="pt-10 border-t border-slate-100">
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
-                  <TrendingUp className="w-6 h-6 text-white" />
+              <div className="flex items-center justify-between w-full mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                    <TrendingUp className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 italic uppercase">Phân Tích Nợ Chi Tiết</h3>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-2xl font-black text-slate-900 italic uppercase">Phân Tích Nợ Chi Tiết</h3>
-                            </div>
+                <button 
+                  onClick={() => {
+                    if (!data) return;
+                    
+                    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'ma kh', 'mã khách hàng']);
+                    const tenKhangCol = findColumn(['ten_khang', 'tenkhang', 'tên khách hàng', 'ten khang', 'tên kh']);
+                    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'tien_no', 'so tien', 'tong_no']);
+                    const maKhttCol = findColumn(['ma_khtt', 'makhtt', 'mã khtt', 'ma khtt']);
+                    const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
+
+                    if (!maKhangCol) {
+                      alert("Không tìm thấy cột Mã khách hàng để xử lý");
+                      return;
+                    }
+
+                    // Group by Customer ID
+                    const customersMap = new Map<string, any>();
+                    data.rows.forEach(row => {
+                      const makh = row[maKhangCol]?.toString() || '';
+                      if (!makh) return;
+                      
+                      if (!customersMap.has(makh)) {
+                        customersMap.set(makh, {
+                          'Mã Khách Hàng': makh,
+                          'Tên Khách Hàng': row[tenKhangCol || ''] || '',
+                          'Mã KHTT': row[maKhttCol || ''] || '',
+                          'Mã Sổ GCS': row[maSoCol || ''] || '',
+                          'Số Kỳ Nợ': 0,
+                          'Tổng Tiền Nợ': 0,
+                          'Số Hóa Đơn': 0
+                        });
+                      }
+                      
+                      const cur = customersMap.get(makh);
+                      cur['Số Kỳ Nợ'] += 1;
+                      cur['Tổng Tiền Nợ'] += (Number(row[tongTienCol || '']) || 0);
+                      cur['Số Hóa Đơn'] += 1;
+                    });
+
+                    // Sort by debt cycles descending
+                    const sortedData = Array.from(customersMap.values()).sort((a, b) => b['Số Kỳ Nợ'] - a['Số Kỳ Nợ']);
+
+                    const worksheet = XLSX.utils.json_to_sheet(sortedData);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Phan_Tich_No_Khach_Hang");
+                    XLSX.writeFile(workbook, `Phan_Tich_No_Toan_Bo_${new Date().getTime()}.xlsx`);
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-slate-900 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                >
+                  <Download className="w-4 h-4" />
+                  Tải DS Toàn Bộ
+                </button>
               </div>
 
               <div className="bg-slate-50/50 rounded-[2.5rem] p-4 border border-slate-100 shadow-inner">
@@ -1975,10 +2056,16 @@ export default function App() {
               </div>
               <div className="flex gap-4">
                  <button 
-                  onClick={() => setData(null)}
-                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                  title="Xóa dữ liệu"
+                  onClick={async () => {
+                    if (window.confirm("Bạn có chắc chắn muốn xóa dữ liệu cũ? Mọi báo cáo sẽ bị xóa khỏi bộ nhớ trình duyệt.")) {
+                      await localforage.removeItem('xcel_report_data');
+                      setData(null);
+                    }
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-500 transition-colors flex items-center gap-2"
+                  title="Xóa dữ liệu cũ"
                 >
+                  <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Xóa dữ liệu cũ</span>
                   <X className="w-6 h-6" />
                 </button>
               </div>
@@ -1998,6 +2085,12 @@ export default function App() {
                 {activeTab === 'data' && renderDataView()}
               </motion.div>
             </AnimatePresence>
+          </div>
+        ) : isLoadingPersisted ? (
+          <div className="flex-1 flex flex-col items-center justify-center bg-slate-50">
+             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6" />
+             <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-widest animate-pulse">Đang khôi phục dữ liệu...</h3>
+             <p className="text-slate-400 text-sm mt-2 font-bold uppercase tracking-tighter">Vui lòng chờ trong giây lát</p>
           </div>
         ) : (
           renderEmptyState()
