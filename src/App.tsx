@@ -2309,7 +2309,7 @@ export default function App() {
       
       <main className="flex-1 flex flex-col">
         {data ? (
-          <div className="p-8 max-w-6xl mx-auto w-full">
+          <div className="p-8 max-w-[1500px] mx-auto w-full">
             <header className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-4">
                  <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-slate-100 overflow-hidden">
