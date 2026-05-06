@@ -998,7 +998,15 @@ export default function App() {
     if (!data) return null;
 
     const ngayPhCol = findColumn(['ngay_phanh', 'ngay ph anh', 'ngày phát hành', 'ngay_ph', 'ngay ph']);
-    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien', 'thuong_ky', 'thường kỳ', 'tiền thường kỳ']);
+    // Tìm cột tháng cụ thể để nhóm
+    const thangCol = findColumn(['tháng', 'thang', 'thang_ky']);
+    const kyCol = findColumn(['kỳ', 'ky', 'period']);
+    const namCol = findColumn(['nam', 'năm', 'year']);
+    const maSogcsCol = findColumn(['ma_sogcs', 'sogcs', 'mã sổ']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
+    const kihieuSeryCol = findColumn(['kihieu_sery', 'ký hiệu sery', 'kihieu']);
+    const maNhomCol = findColumn(['manhom_khang', 'mã nhóm', 'ma_nhom']);
     const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'mã khách hàng']);
     const tenKhangCol = findColumn(['ten_khang', 'tenkhang', 'tên khách hàng', 'ten khang', 'tên kh']);
 
@@ -1020,6 +1028,7 @@ export default function App() {
       if (!date) return false;
       const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
       const amount = Number(row[tongTienCol]) || 0;
+      // Formula: (today - ngay_phanh) - 177 > 0  => diffDays > 177
       return diffDays > 177 && amount > 0;
     }).map(row => {
       const date = parseDateValue(row[ngayPhCol]);
@@ -1035,26 +1044,65 @@ export default function App() {
       return { ...row, _diffDays: diffDays, _isToChuc: isToChuc };
     });
 
-    // Thống kê theo tháng phát hành
-    const monthlyStats: Record<string, { month: string; amount: number; count: number; toChuc: number; caNhan: number }> = {};
+    // Thống kê theo tháng phát hành (lấy từ cột Tháng/Kỳ trong file)
+    const monthlyStats: Record<string, { 
+      month: string; 
+      amount: number; 
+      count: number; 
+      toChuc: number; 
+      caNhan: number;
+      toChucAmount: number;
+      caNhanAmount: number;
+    }> = {};
     badDebtRows.forEach(row => {
-       const date = parseDateValue(row[ngayPhCol]);
-       if (date) {
-         const m = (date.getMonth() + 1).toString().padStart(2, '0');
-         const y = date.getFullYear();
-         const key = `${m}/${y}`;
-         if (!monthlyStats[key]) monthlyStats[key] = { month: key, amount: 0, count: 0, toChuc: 0, caNhan: 0 };
-         monthlyStats[key].amount += (Number(row[tongTienCol]) || 0);
+       // Ưu tiên lấy từ cột Tháng (thangCol) rồi mới đến Kỳ (kyCol) cho tiêu chuẩn group by
+       let key = '';
+       if (thangCol && row[thangCol]) {
+         key = row[thangCol].toString().trim();
+       } else if (kyCol && row[kyCol]) {
+         key = row[kyCol].toString().trim();
+       } else {
+         const date = parseDateValue(row[ngayPhCol]);
+         if (date) {
+           const m = (date.getMonth() + 1).toString().padStart(2, '0');
+           const y = date.getFullYear();
+           key = `${m}/${y}`;
+         }
+       }
+       
+       if (key) {
+         if (!monthlyStats[key]) monthlyStats[key] = { month: key, amount: 0, count: 0, toChuc: 0, caNhan: 0, toChucAmount: 0, caNhanAmount: 0 };
+         const rowAmount = (Number(row[tongTienCol]) || 0);
+         monthlyStats[key].amount += rowAmount;
          monthlyStats[key].count += 1;
-         if (row._isToChuc) monthlyStats[key].toChuc += 1;
-         else monthlyStats[key].caNhan += 1;
+         if (row._isToChuc) {
+           monthlyStats[key].toChuc += 1;
+           monthlyStats[key].toChucAmount += rowAmount;
+         } else {
+           monthlyStats[key].caNhan += 1;
+           monthlyStats[key].caNhanAmount += rowAmount;
+         }
        }
     });
 
-    const chartData = Object.values(monthlyStats).sort((a,b) => {
-      const [m1, y1] = a.month.split('/').map(Number);
-      const [m2, y2] = b.month.split('/').map(Number);
-      return y1 !== y2 ? y1 - y2 : m1 - m2;
+    const chartData = Object.values(monthlyStats).sort((a, b) => {
+      // Try parsing formats like MM/YYYY, YYYYMM, or simple numbers for sorting
+      const parse = (s: string) => {
+        const clean = s.replace(/[^\d/-]/g, '').trim();
+        const parts = clean.match(/(\d{1,2})[/-](\d{4})/); // MM/YYYY
+        if (parts) return parseInt(parts[2]) * 100 + parseInt(parts[1]);
+        
+        const yyyymm = clean.match(/(\d{4})(\d{2})/); // YYYYMM
+        if (yyyymm) return parseInt(yyyymm[1]) * 100 + parseInt(yyyymm[2]);
+        
+        const numeric = clean.match(/(\d+)/); // Just numbers
+        if (numeric) return parseInt(numeric[0]);
+        return 0;
+      };
+      const v1 = parse(a.month);
+      const v2 = parse(b.month);
+      if (v1 !== v2) return v1 - v2;
+      return a.month.localeCompare(b.month);
     });
 
     const totalAmount = badDebtRows.reduce((acc, r) => acc + (Number(r[tongTienCol]) || 0), 0);
@@ -1073,7 +1121,7 @@ export default function App() {
 
     const groupedCustomerData = Object.values(customerBadDebt).sort((a,b) => b.amount - a.amount);
 
-    const exportToExcel = () => {
+    const exportToSummaryExcel = () => {
       const exportData = groupedCustomerData.map(row => ({
         'Mã KH': row.id,
         'Tên Khách Hàng': row.name,
@@ -1084,7 +1132,30 @@ export default function App() {
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Tong_Hop_No_KH");
-      XLSX.writeFile(wb, `Bao_Cao_No_Kho_Doi_KH_${new Date().toLocaleDateString('vi-VN')}.xlsx`);
+      XLSX.writeFile(wb, `Tong_Hop_No_KH_${new Date().toLocaleDateString('vi-VN')}.xlsx`);
+    };
+
+    const exportDetailsToExcel = () => {
+      const exportData = badDebtRows.map(row => ({
+        'LOAI_KHANG': row[loaiKhCol || '']?.toString(),
+        'MANHOM_KHANG': row[maNhomCol || '']?.toString(),
+        'Mã KH': row[maKhangCol || '']?.toString(),
+        'Tên Khách Hàng': row[tenKhangCol || '']?.toString(),
+        'NAM': row[namCol || '']?.toString(),
+        'THANG': row[thangCol || '']?.toString(),
+        'KY': row[kyCol || '']?.toString(),
+        'MA_SOGCS': row[maSogcsCol || '']?.toString(),
+        'NGAY_PHANH': row[ngayPhCol]?.toString(),
+        'Số Ngày Nợ': row._diffDays,
+        'SO_SERY': row[soSeryCol || '']?.toString(),
+        'KIHIEU_SERY': row[kihieuSeryCol || '']?.toString(),
+        'Tiền Nợ': Number(row[tongTienCol]) || 0
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Chi_Tiet_No_Kho_Doi");
+      XLSX.writeFile(wb, `Chi_Tiet_No_Kho_Doi_${new Date().toLocaleDateString('vi-VN')}.xlsx`);
     };
 
     return (
@@ -1103,13 +1174,24 @@ export default function App() {
              </div>
            </div>
            
-           <button 
-             onClick={exportToExcel}
-             className="h-12 px-8 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase hover:bg-emerald-600 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-           >
-             <FileSpreadsheet className="w-4 h-4" />
-             Xuất File Excel
-           </button>
+           <div className="flex gap-3">
+             <button 
+               onClick={exportToSummaryExcel}
+               className="h-12 px-6 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-slate-800 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+               title="Xuất tổng hợp theo khách hàng"
+             >
+               <FileSpreadsheet className="w-4 h-4" />
+               Xuất Tổng Hợp
+             </button>
+             <button 
+               onClick={exportDetailsToExcel}
+               className="h-12 px-6 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-emerald-700 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+               title="Xuất chi tiết từng hóa đơn"
+             >
+               <Download className="w-4 h-4" />
+               Tải Chi Tiết
+             </button>
+           </div>
         </div>
 
         {/* Metrics Grid */}
@@ -1155,25 +1237,27 @@ export default function App() {
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-50">
-                    {chartData.sort((a,b) => {
-                      const [m1, y1] = a.month.split('/').map(Number);
-                      const [m2, y2] = b.month.split('/').map(Number);
-                      return y2 !== y1 ? y2 - y1 : m2 - m1;
-                    }).map((row, idx) => {
+                    {chartData.map((row, idx) => {
                       const totalKH = row.toChuc + row.caNhan;
                       const tcPercent = totalKH > 0 ? (row.toChuc / totalKH) * 100 : 0;
                       const cnPercent = totalKH > 0 ? (row.caNhan / totalKH) * 100 : 0;
 
                       return (
                        <tr key={idx} className="hover:bg-red-50/20 transition-colors">
-                          <td className="px-8 py-4 font-bold text-slate-600">Tháng {row.month}</td>
+                          <td className="px-8 py-4 font-bold text-slate-600 uppercase">
+                             {/^(tháng|kỳ)/i.test(row.month.toString()) ? row.month : `Tháng ${row.month}`}
+                          </td>
                           <td className="px-8 py-4 text-center font-bold text-slate-900 tabular-nums">{row.count.toLocaleString()}</td>
                           <td className="px-8 py-4 text-right font-black text-red-600 tabular-nums">{row.amount.toLocaleString()}</td>
                           <td className="px-8 py-4">
-                             <div className="flex flex-col gap-1.5 min-w-[120px]">
-                                <div className="flex justify-between text-[9px] font-black uppercase">
-                                   <span className="text-emerald-600">TC: {row.toChuc}</span>
-                                   <span className="text-orange-600">CN: {row.caNhan}</span>
+                             <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                <div className="flex justify-between text-[10px] font-black uppercase mb-1">
+                                   <div className="flex flex-col gap-0.5">
+                                      <span className="text-emerald-600">TC: {row.toChuc} | {row.toChucAmount.toLocaleString()} đ</span>
+                                   </div>
+                                   <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-orange-600">CN: {row.caNhan} | {row.caNhanAmount.toLocaleString()} đ</span>
+                                   </div>
                                 </div>
                                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
                                    <div style={{ width: `${tcPercent}%` }} className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
@@ -1235,6 +1319,7 @@ export default function App() {
                        <th className="px-6 py-5 text-left font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Mã KH</th>
                        <th className="px-6 py-5 text-left font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Tên Khách Hàng</th>
                        <th className="px-6 py-5 text-center font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Ngày PH</th>
+                       <th className="px-6 py-5 text-center font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Số Ngày Nợ</th>
                        <th className="px-6 py-5 text-right font-black text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100">Tiền Nợ</th>
                     </tr>
                  </thead>
@@ -1244,6 +1329,13 @@ export default function App() {
                           <td className="px-6 py-5 font-bold text-slate-900">{row[maKhangCol || '']?.toString()}</td>
                           <td className="px-6 py-5 font-bold text-slate-600 uppercase italic opacity-80">{row[tenKhangCol || '']?.toString()}</td>
                           <td className="px-6 py-5 text-center font-bold text-slate-400 tabular-nums">{row[ngayPhCol]?.toString()}</td>
+                          <td className="px-6 py-5 text-center">
+                             <span className={`px-3 py-1 rounded-full text-[10px] font-black tabular-nums ${
+                               row._diffDays > 365 ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                             }`}>
+                               {row._diffDays} ngày
+                             </span>
+                          </td>
                           <td className="px-6 py-5 text-right font-black text-slate-900 tabular-nums">{(Number(row[tongTienCol]) || 0).toLocaleString()} đ</td>
                        </tr>
                     ))}
