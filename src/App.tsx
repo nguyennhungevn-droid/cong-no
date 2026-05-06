@@ -2060,7 +2060,7 @@ export default function App() {
       });
     });
 
-    return Object.values(termGroups).sort((a, b) => b.term - a.term);
+    return Object.values(termGroups).sort((a, b) => a.term - b.term);
   }, [data, baseFilteredRows, findColumn]);
 
   const fullGroupedData = useMemo(() => {
@@ -2120,7 +2120,7 @@ export default function App() {
       else g.caNhan += 1;
     });
 
-    return Object.values(termGroups).sort((a, b) => b.term - a.term);
+    return Object.values(termGroups).sort((a, b) => a.term - b.term);
   }, [data, findColumn]);
 
   const badDebtMonthlyData = useMemo(() => {
