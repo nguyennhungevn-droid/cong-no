@@ -625,14 +625,13 @@ export default function App() {
       return;
     }
 
-    const now = new Date();
-    const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayConstant = new Date(2026, 3, 23); // Standard comparison date
 
     const resultWithDays = data.rows.map(row => {
       const date = parseDateValue(row[ngayPhCol]);
       if (!date) return { row, diffDays: -1 };
-      const diffMs = d1.getTime() - date.getTime();
-      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      const diffMs = todayConstant.getTime() - date.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       return { row, diffDays };
     });
 
@@ -1022,17 +1021,17 @@ export default function App() {
       );
     }
 
-    const today = new Date(2026, 3, 23); // Standard comparison date
+    const todayConstant = new Date(2026, 3, 23); // Standard comparison date
     const badDebtRows = data.rows.filter(row => {
       const date = parseDateValue(row[ngayPhCol]);
       if (!date) return false;
-      const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.floor((todayConstant.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
       const amount = Number(row[tongTienCol]) || 0;
       // Formula: (today - ngay_phanh) - 177 > 0  => diffDays > 177
       return diffDays > 177 && amount > 0;
     }).map(row => {
       const date = parseDateValue(row[ngayPhCol]);
-      const diffDays = date ? Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      const diffDays = date ? Math.floor((todayConstant.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)) : 0;
       
       const loaiRaw = loaiKhCol ? row[loaiKhCol]?.toString().toLowerCase().trim() || '' : '';
       const isToChuc = loaiRaw === '1' || 
@@ -1053,7 +1052,10 @@ export default function App() {
       caNhan: number;
       toChucAmount: number;
       caNhanAmount: number;
+      serySet: Set<string>;
+      emptySeryCount: number;
     }> = {};
+
     badDebtRows.forEach(row => {
        // Ưu tiên lấy từ cột Tháng (thangCol) rồi mới đến Kỳ (kyCol) cho tiêu chuẩn group by
        let key = '';
@@ -1071,10 +1073,29 @@ export default function App() {
        }
        
        if (key) {
-         if (!monthlyStats[key]) monthlyStats[key] = { month: key, amount: 0, count: 0, toChuc: 0, caNhan: 0, toChucAmount: 0, caNhanAmount: 0 };
+         if (!monthlyStats[key]) {
+           monthlyStats[key] = { 
+             month: key, 
+             amount: 0, 
+             count: 0, 
+             toChuc: 0, 
+             caNhan: 0, 
+             toChucAmount: 0, 
+             caNhanAmount: 0,
+             serySet: new Set<string>(),
+             emptySeryCount: 0
+           };
+         }
          const rowAmount = (Number(row[tongTienCol]) || 0);
          monthlyStats[key].amount += rowAmount;
-         monthlyStats[key].count += 1;
+         
+         const sery = row[soSeryCol || '']?.toString().trim();
+         if (sery) {
+           monthlyStats[key].serySet.add(sery);
+         } else {
+           monthlyStats[key].emptySeryCount += 1;
+         }
+
          if (row._isToChuc) {
            monthlyStats[key].toChuc += 1;
            monthlyStats[key].toChucAmount += rowAmount;
@@ -1085,7 +1106,10 @@ export default function App() {
        }
     });
 
-    const chartData = Object.values(monthlyStats).sort((a, b) => {
+    const chartData = Object.values(monthlyStats).map(s => ({
+       ...s,
+       count: s.serySet.size + s.emptySeryCount
+    })).sort((a, b) => {
       // Try parsing formats like MM/YYYY, YYYYMM, or simple numbers for sorting
       const parse = (s: string) => {
         const clean = s.replace(/[^\d/-]/g, '').trim();
@@ -1108,18 +1132,26 @@ export default function App() {
     const totalAmount = badDebtRows.reduce((acc, r) => acc + (Number(r[tongTienCol]) || 0), 0);
 
     // Grouping bad debt by customer
-    const customerBadDebt: Record<string, { id: string; name: string; count: number; amount: number }> = {};
+    const customerBadDebt: Record<string, { id: string; name: string; amount: number; serySet: Set<string>; emptySeryCount: number }> = {};
     badDebtRows.forEach(row => {
       const id = row[maKhangCol || '']?.toString();
       if (!id) return;
       if (!customerBadDebt[id]) {
-        customerBadDebt[id] = { id, name: row[tenKhangCol || '']?.toString() || '', count: 0, amount: 0 };
+        customerBadDebt[id] = { id, name: row[tenKhangCol || '']?.toString() || '', amount: 0, serySet: new Set<string>(), emptySeryCount: 0 };
       }
-      customerBadDebt[id].count += 1;
+      const sery = row[soSeryCol || '']?.toString().trim();
+      if (sery) customerBadDebt[id].serySet.add(sery);
+      else customerBadDebt[id].emptySeryCount += 1;
+      
       customerBadDebt[id].amount += (Number(row[tongTienCol]) || 0);
     });
 
-    const groupedCustomerData = Object.values(customerBadDebt).sort((a,b) => b.amount - a.amount);
+    const groupedCustomerData = Object.values(customerBadDebt).map(c => ({
+      id: c.id,
+      name: c.name,
+      amount: c.amount,
+      count: c.serySet.size + c.emptySeryCount
+    })).sort((a,b) => b.amount - a.amount);
 
     const exportToSummaryExcel = () => {
       const exportData = groupedCustomerData.map(row => ({
@@ -2128,18 +2160,19 @@ export default function App() {
 
     const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
     const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const now = new Date(2026, 3, 20); 
-    const monthlyGroups: Record<string, { month: string; count: number; totalAmount: number; sortKey: number }> = {};
+    const todayConstant = new Date(2026, 3, 23); 
+    const monthlyGroups: Record<string, { month: string; totalAmount: number; sortKey: number; serySet: Set<string>; emptySeryCount: number }> = {};
 
     data.rows.forEach(row => {
       const amount = Number(row[tongTienCol]) || 0;
       const date = parseDateValue(row[ngayPhCol]);
       
       if (date) {
-        const diffMs = now.getTime() - date.getTime();
+        const diffMs = todayConstant.getTime() - date.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays > 177 && amount > 0) {
@@ -2149,15 +2182,22 @@ export default function App() {
           const sortKey = y * 100 + m;
 
           if (!monthlyGroups[monthLabel]) {
-            monthlyGroups[monthLabel] = { month: monthLabel, count: 0, totalAmount: 0, sortKey };
+            monthlyGroups[monthLabel] = { month: monthLabel, totalAmount: 0, sortKey, serySet: new Set<string>(), emptySeryCount: 0 };
           }
-          monthlyGroups[monthLabel].count += 1;
           monthlyGroups[monthLabel].totalAmount += amount;
+          const sery = row[soSeryCol || '']?.toString().trim();
+          if (sery) monthlyGroups[monthLabel].serySet.add(sery);
+          else monthlyGroups[monthLabel].emptySeryCount += 1;
         }
       }
     });
 
-    return Object.values(monthlyGroups).sort((a, b) => b.sortKey - a.sortKey);
+    return Object.values(monthlyGroups).map(g => ({
+      month: g.month,
+      count: g.serySet.size + g.emptySeryCount,
+      totalAmount: g.totalAmount,
+      sortKey: g.sortKey
+    })).sort((a, b) => b.sortKey - a.sortKey);
   }, [data, findColumn]);
 
   const badDebtTypeStats = useMemo(() => {
@@ -2166,39 +2206,47 @@ export default function App() {
     const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
     const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien']);
     const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const now = new Date(2026, 3, 20); 
+    const todayConstant = new Date(2026, 3, 23); 
     let toChucAmount = 0;
     let caNhanAmount = 0;
-    let toChucInvoices = 0;
-    let caNhanInvoices = 0;
+    const toChucSerySet = new Set<string>();
+    const caNhanSerySet = new Set<string>();
+    let toChucEmptySery = 0;
+    let caNhanEmptySery = 0;
 
     data.rows.forEach(row => {
       const amount = Number(row[tongTienCol]) || 0;
       const date = parseDateValue(row[ngayPhCol]);
-      const loai = loaiKhCol ? row[loaiKhCol]?.toString() : '';
+      const loai = loaiKhCol ? row[loaiKhCol]?.toString().toLowerCase() : '';
       
       if (date) {
-        const diffMs = now.getTime() - date.getTime();
+        const diffMs = todayConstant.getTime() - date.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays > 177 && amount > 0) {
-          if (loai === '1' || loai === 'tổ chức' || loai === 'tc') {
+          const isToChuc = loai === '1' || loai === 'tổ chức' || loai === 'tc' || loai.includes('to chuc');
+          const sery = row[soSeryCol || '']?.toString().trim();
+
+          if (isToChuc) {
             toChucAmount += amount;
-            toChucInvoices += 1;
+            if (sery) toChucSerySet.add(sery);
+            else toChucEmptySery += 1;
           } else {
             caNhanAmount += amount;
-            caNhanInvoices += 1;
+            if (sery) caNhanSerySet.add(sery);
+            else caNhanEmptySery += 1;
           }
         }
       }
     });
 
     return [
-      { name: 'Cá Nhân', value: caNhanAmount, invoices: caNhanInvoices, color: '#ef4444' }, 
-      { name: 'Tổ Chức', value: toChucAmount, invoices: toChucInvoices, color: '#3b82f6' }  
+      { name: 'Cá Nhân', value: caNhanAmount, invoices: caNhanSerySet.size + caNhanEmptySery, color: '#ef4444' }, 
+      { name: 'Tổ Chức', value: toChucAmount, invoices: toChucSerySet.size + toChucEmptySery, color: '#3b82f6' }  
     ].filter(i => i.invoices > 0);
   }, [data, findColumn]);
 
@@ -2208,6 +2256,7 @@ export default function App() {
     const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
     const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền']);
     const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
 
     if (!maSoCol || !tongTienCol) return null;
 
@@ -2222,9 +2271,12 @@ export default function App() {
     };
 
     const thoaiHoanCustomerIds = new Set<string>();
+    const badDebtSerySet = new Set<string>();
+    let badDebtEmptySeryCount = 0;
+    let badDebtTotalAmount = 0;
+
     const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
-    
-    const now = new Date(2026, 3, 20); 
+    const todayConstant = new Date(2026, 3, 23); 
     
     data.rows.forEach(row => {
       const maSo = row[maSoCol]?.toString() || '';
@@ -2253,12 +2305,14 @@ export default function App() {
       if (ngayPhCol) {
         const date = parseDateValue(row[ngayPhCol]);
         if (date) {
-          const diffMs = now.getTime() - date.getTime();
+          const diffMs = todayConstant.getTime() - date.getTime();
           const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
           
           if (diffDays > 177 && amount > 0) {
-            stats.noKhoDoi.hd += 1;
-            stats.noKhoDoi.tien += amount;
+            badDebtTotalAmount += amount;
+            const sery = row[soSeryCol || '']?.toString().trim();
+            if (sery) badDebtSerySet.add(sery);
+            else badDebtEmptySeryCount += 1;
           }
         }
       }
@@ -2267,6 +2321,8 @@ export default function App() {
       stats.tong.tien += amount;
     });
 
+    stats.noKhoDoi.hd = badDebtSerySet.size + badDebtEmptySeryCount;
+    stats.noKhoDoi.tien = badDebtTotalAmount;
     stats.thoaiHoan.customers = thoaiHoanCustomerIds.size;
 
     return stats;
