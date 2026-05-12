@@ -617,20 +617,21 @@ export default function App() {
       return null;
     };
 
-    const ngayPhCol = findCol(['ngay_phanh', 'ngayphanh', 'ngay_ph_hdon', 'ngay_hd', 'ngày phát hành', 'ngày hd']);
-    const tongTienCol = findCol(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien']);
+    const ngayPhCol = findCol(['ngay_phanh', 'ngayphanh', 'ngay_ph_hdon', 'ngay_hd', 'ngày phát hành', 'ngày hd', 'ngay_ph', 'ngayph']);
+    const tongTienCol = findCol(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'sotien', 'tien_no', 'tong_tien_no']);
 
     if (!ngayPhCol || !tongTienCol) {
       alert("Không tìm thấy cột Ngày phát hành hoặc Tổng tiền để lọc dữ liệu.");
       return;
     }
 
-    const todayConstant = new Date(2026, 3, 23); // Standard comparison date
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const resultWithDays = data.rows.map(row => {
       const date = parseDateValue(row[ngayPhCol]);
       if (!date) return { row, diffDays: -1 };
-      const diffMs = todayConstant.getTime() - date.getTime();
+      const diffMs = today.getTime() - date.getTime();
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       return { row, diffDays };
     });
@@ -1002,9 +1003,9 @@ export default function App() {
     const thangCol = findColumn(['tháng', 'thang', 'thang_ky']);
     const kyCol = findColumn(['kỳ', 'ky', 'period']);
     const namCol = findColumn(['nam', 'năm', 'year']);
-    const maSogcsCol = findColumn(['ma_sogcs', 'sogcs', 'mã sổ']);
-    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
-    const kihieuSeryCol = findColumn(['kihieu_sery', 'ký hiệu sery', 'kihieu']);
+    const maSogcsCol = findColumn(['ma_sogcs', 'sogcs', 'mã sổ', 'so_gcs', 'maso', 'ma_so']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery', 'seri', 'số seri', 'so_seri', 'so_sery']);
+    const kihieuSeryCol = findColumn(['kihieu_sery', 'ký hiệu sery', 'kihieu', 'ky_hieu', 'ki_hieu']);
     const maNhomCol = findColumn(['manhom_khang', 'mã nhóm', 'ma_nhom']);
     const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'mã khách hàng']);
     const tenKhangCol = findColumn(['ten_khang', 'tenkhang', 'tên khách hàng', 'ten khang', 'tên kh']);
@@ -1021,17 +1022,19 @@ export default function App() {
       );
     }
 
-    const todayConstant = new Date(2026, 3, 23); // Standard comparison date
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const badDebtRows = data.rows.filter(row => {
       const date = parseDateValue(row[ngayPhCol]);
       if (!date) return false;
-      const diffDays = Math.floor((todayConstant.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
       const amount = Number(row[tongTienCol]) || 0;
       // Formula: (today - ngay_phanh) - 177 > 0  => diffDays > 177
       return diffDays > 177 && amount > 0;
     }).map(row => {
       const date = parseDateValue(row[ngayPhCol]);
-      const diffDays = date ? Math.floor((todayConstant.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      const diffDays = date ? Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)) : 0;
       
       const loaiRaw = loaiKhCol ? row[loaiKhCol]?.toString().toLowerCase().trim() || '' : '';
       const isToChuc = loaiRaw === '1' || 
@@ -2158,13 +2161,14 @@ export default function App() {
   const badDebtMonthlyData = useMemo(() => {
     if (!data) return [];
 
-    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
-    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien']);
-    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd', 'ngay_ph', 'ngayphanh']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'so_tien', 'tien_no']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery', 'seri', 'số seri', 'so_seri']);
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const todayConstant = new Date(2026, 3, 23); 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const monthlyGroups: Record<string, { month: string; totalAmount: number; sortKey: number; serySet: Set<string>; emptySeryCount: number }> = {};
 
     data.rows.forEach(row => {
@@ -2172,7 +2176,7 @@ export default function App() {
       const date = parseDateValue(row[ngayPhCol]);
       
       if (date) {
-        const diffMs = todayConstant.getTime() - date.getTime();
+        const diffMs = today.getTime() - date.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays > 177 && amount > 0) {
@@ -2203,14 +2207,15 @@ export default function App() {
   const badDebtTypeStats = useMemo(() => {
     if (!data) return [];
 
-    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
-    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien']);
-    const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh']);
-    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd', 'ngay_ph', 'ngayphanh']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'so_tien', 'tien_no']);
+    const loaiKhCol = findColumn(['loại_khang', 'loaikh', 'loai_kh', 'loai', 'loai k', 'tc_cn']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery', 'seri', 'so_seri']);
 
     if (!ngayPhCol || !tongTienCol) return [];
 
-    const todayConstant = new Date(2026, 3, 23); 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); 
     let toChucAmount = 0;
     let caNhanAmount = 0;
     const toChucSerySet = new Set<string>();
@@ -2224,7 +2229,7 @@ export default function App() {
       const loai = loaiKhCol ? row[loaiKhCol]?.toString().toLowerCase() : '';
       
       if (date) {
-        const diffMs = todayConstant.getTime() - date.getTime();
+        const diffMs = today.getTime() - date.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays > 177 && amount > 0) {
@@ -2253,10 +2258,10 @@ export default function App() {
   const phienData = useMemo(() => {
     if (!data) return null;
 
-    const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs']);
-    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền']);
-    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh']);
-    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery']);
+    const maSoCol = findColumn(['ma_sogcs', 'mã sổ', 'maso', 'ma_so', 'sổ gcs', 'so_gcs', 'ma_so_gcs']);
+    const tongTienCol = findColumn(['tổng tiền', 'tong_tien', 'tongtien', 'số tiền', 'so_tien', 'tien_no']);
+    const maKhangCol = findColumn(['ma_khang', 'makhang', 'ma_kh', 'makh', 'mã kh', 'mã khách hàng']);
+    const soSeryCol = findColumn(['so_sery', 'số sery', 'sery', 'seri', 'so_seri', 'số seri']);
 
     if (!maSoCol || !tongTienCol) return null;
 
@@ -2275,8 +2280,9 @@ export default function App() {
     let badDebtEmptySeryCount = 0;
     let badDebtTotalAmount = 0;
 
-    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd']);
-    const todayConstant = new Date(2026, 3, 23); 
+    const ngayPhCol = findColumn(['ngay_phanh', 'ngày phát hành', 'ngay_hd', 'ngay_ph', 'ngayphanh']);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); 
     
     data.rows.forEach(row => {
       const maSo = row[maSoCol]?.toString() || '';
@@ -2305,7 +2311,7 @@ export default function App() {
       if (ngayPhCol) {
         const date = parseDateValue(row[ngayPhCol]);
         if (date) {
-          const diffMs = todayConstant.getTime() - date.getTime();
+          const diffMs = today.getTime() - date.getTime();
           const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
           
           if (diffDays > 177 && amount > 0) {
@@ -2471,10 +2477,8 @@ export default function App() {
               <div className="flex gap-4">
                  <button 
                   onClick={async () => {
-                    if (window.confirm("Bạn có chắc chắn muốn xóa dữ liệu cũ? Mọi báo cáo sẽ bị xóa khỏi bộ nhớ trình duyệt.")) {
-                      await localforage.removeItem('xcel_report_data');
-                      setData(null);
-                    }
+                    await localforage.removeItem('xcel_report_data');
+                    setData(null);
                   }}
                   className="p-2 text-slate-400 hover:text-red-500 transition-colors flex items-center gap-2"
                   title="Xóa dữ liệu cũ"
