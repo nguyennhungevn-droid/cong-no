@@ -1485,14 +1485,14 @@ export default function App() {
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-16">STT</th>
-                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100">Mã KH</th>
-                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100">Tên Khách Hàng</th>
+                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-32 min-w-[110px]">Mã KH</th>
+                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 min-w-[360px] w-auto">Tên Khách Hàng</th>
                       <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-20">Tháng</th>
                       <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-20">Năm</th>
-                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-32">STT</th>
-                      <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-32">Ngày Phát Hành</th>
-                      <th className="px-6 py-4 text-right font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-40">Tổng Tiền</th>
-                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-slate-100 w-48">Ngày quá hạn</th>
+                      <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-24">STT</th>
+                      <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-28">Ngày Phát Hành</th>
+                      <th className="px-6 py-4 text-right font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-36">Tổng Tiền</th>
+                      <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-slate-100 w-28 min-w-[100px]">Ngày quá hạn</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -1523,19 +1523,19 @@ export default function App() {
                           const dDays = Math.floor(diffTime / (1000 * 3600 * 24)) - 5;
                           if (dDays > 0) {
                             overdueHtml = (
-                              <span className="text-red-500 font-extrabold whitespace-nowrap bg-red-50 px-2 py-0.5 rounded-md border border-red-100/50">
-                                Quá hạn {dDays} ngày
+                              <span className="text-red-500 font-extrabold text-[10px] sm:text-[11px] leading-tight bg-red-50 px-2 py-1 rounded-md border border-red-100/50 block text-center max-w-[100px] mx-auto break-words">
+                                Quá hạn<br />{dDays} ngày
                               </span>
                             );
                           } else {
                             overdueHtml = (
-                              <span className="text-slate-500 group-hover:text-slate-700 font-semibold">
+                              <span className="text-slate-500 group-hover:text-slate-700 font-bold text-[10px] sm:text-[11px] leading-tight block text-center">
                                 Chưa đến hạn
                               </span>
                             );
                           }
                         } else {
-                          overdueHtml = <span className="text-slate-300 italic text-xs">N/A</span>;
+                          overdueHtml = <span className="text-slate-300 italic text-[10px] block text-center">N/A</span>;
                         }
 
                         return (
@@ -1548,7 +1548,7 @@ export default function App() {
                             <td className="px-6 py-3.5 text-slate-600 font-mono border-r border-slate-50/50 text-xs">{codeSTT}</td>
                             <td className="px-6 py-3.5 text-center text-slate-600 border-r border-slate-50/50 text-xs">{phDateFormatted}</td>
                             <td className="px-6 py-3.5 text-right font-black text-indigo-950 tabular-nums border-r border-slate-50/50">{amt.toLocaleString()}</td>
-                            <td className="px-6 py-3.5">{overdueHtml}</td>
+                            <td className="px-4 py-3.5 text-center">{overdueHtml}</td>
                           </tr>
                         );
                       })
