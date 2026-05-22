@@ -2010,15 +2010,15 @@ export default function App() {
                       <td className="px-6 py-4 font-bold text-slate-600 opacity-70 uppercase">{r[tenKhangCol || '']?.toString()}</td>
                       <td className="px-6 py-4 text-center">
                         {r._customerType === 'Tổ chức' ? (
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black uppercase">Tổ chức</span>
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-[10px] font-black uppercase tracking-wider">TC</span>
                         ) : (
-                          <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-100 rounded-full text-[10px] font-black uppercase">Cá nhân</span>
+                          <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-100 rounded-lg text-[10px] font-black uppercase tracking-wider">CN</span>
                         )}
                       </td>
                       <td className="px-6 py-4 font-mono text-xs">{r._sery || 'N/A'}</td>
                       <td className="px-6 py-4 text-center font-bold text-slate-500">{r._billingLabel}</td>
                       <td className="px-6 py-4 text-center text-slate-400 tabular-nums">{r[ngayPhCol || '']?.toString()}</td>
-                      <td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-[10px] font-black">{r._diffDays} ngày</span></td>
+                      <td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-[10px] font-black">{r._diffDays}</span></td>
                       <td className="px-6 py-4 text-right font-black text-slate-900">{(Number(r[tongTienCol]) || 0).toLocaleString()}</td>
                     </tr>
                   ))
