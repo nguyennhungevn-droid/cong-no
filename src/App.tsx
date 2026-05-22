@@ -88,8 +88,9 @@ const COLUMN_KEYWORDS = {
   LOAI_KHANG: ['loại_khang', 'loaikh', 'loai_kh', 'loai', 'phan_loai', 'tc_cn', 'dt_kh', 'loai kh', 'loai khang', 'tổ chức/cá nhân', 'tc cn'],
   MANHOM_KH: ['manhom_kh', 'mã nhóm', 'nhomkh', 'ma_nhom_kh', 'nhom kh', 'mã nhóm kh', 'manhom_khang', 'ma_nhom'],
   ID_HDON: ['id_hdon', 'idhdon', 'id hóa đơn', 'id hd', 'ma_hdon'],
-  THANG: ['thang', 'tháng', 'tháng_hdon', 'thang_hd', 'thang_no', 'kỳ', 'ky'],
+  THANG: ['thang', 'tháng', 'tháng_hdon', 'thang_hd', 'thang_no'],
   NAM: ['nam', 'năm', 'nam_hdon', 'nam_hd', 'nam_no'],
+  KY: ['kỳ', 'ky', 'kỳ_hdon', 'ky_hdon', 'ky_hd', 'kỳ_hd', 'ky_no'],
 };
 
 // --- Components ---
@@ -1377,6 +1378,7 @@ export default function App() {
         {(() => {
           const maKhangCol = findColumn(COLUMN_KEYWORDS.MA_KHANG);
           const tenKhangCol = findColumn(COLUMN_KEYWORDS.TEN_KHANG);
+          const kyCol = findColumn(COLUMN_KEYWORDS.KY);
           const thangCol = findColumn(COLUMN_KEYWORDS.THANG);
           const namCol = findColumn(COLUMN_KEYWORDS.NAM);
           const ngayPhCol = findColumn(COLUMN_KEYWORDS.NGAY_PHANH);
@@ -1487,6 +1489,7 @@ export default function App() {
                       <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-16">STT</th>
                       <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-32 min-w-[110px]">Mã KH</th>
                       <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 min-w-[360px] w-auto">Tên Khách Hàng</th>
+                      <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-16">Kỳ</th>
                       <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-20">Tháng</th>
                       <th className="px-6 py-4 text-center font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-20">Năm</th>
                       <th className="px-6 py-4 text-left font-black text-slate-500 uppercase text-[10px] tracking-widest border-b border-r border-slate-100 w-24">STT</th>
@@ -1501,6 +1504,7 @@ export default function App() {
                         const globalIdx = (safePage - 1) * segPageSize + idx + 1;
                         const maKhang = maKhangCol ? String(row[maKhangCol] || '') : '';
                         const tenKhang = tenKhangCol ? String(row[tenKhangCol] || '') : '';
+                        const kyVal = kyCol ? String(row[kyCol] || '') : '';
                         const thangVal = thangCol ? String(row[thangCol] || '') : '';
                         const namVal = namCol ? String(row[namCol] || '') : '';
                         const amt = tongTienCol ? (Number(row[tongTienCol]) || 0) : 0;
@@ -1543,6 +1547,7 @@ export default function App() {
                             <td className="px-6 py-3.5 text-slate-400 font-semibold border-r border-slate-50/50">{globalIdx}</td>
                             <td className="px-6 py-3.5 font-bold text-slate-900 border-r border-slate-50/50">{maKhang}</td>
                             <td className="px-6 py-3.5 text-slate-800 font-bold border-r border-slate-50/50">{tenKhang}</td>
+                            <td className="px-6 py-3.5 text-center text-slate-600 border-r border-slate-50/50">{kyVal}</td>
                             <td className="px-6 py-3.5 text-center text-slate-600 border-r border-slate-50/50">{thangVal}</td>
                             <td className="px-6 py-3.5 text-center text-slate-600 border-r border-slate-50/50">{namVal}</td>
                             <td className="px-6 py-3.5 text-slate-600 font-mono border-r border-slate-50/50 text-xs">{codeSTT}</td>
@@ -1554,7 +1559,7 @@ export default function App() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-slate-400 italic">Không tìm thấy dữ liệu hóa đơn trùng khớp.</td>
+                        <td colSpan={10} className="px-6 py-12 text-center text-slate-400 italic">Không tìm thấy dữ liệu hóa đơn trùng khớp.</td>
                       </tr>
                     )}
                   </tbody>
