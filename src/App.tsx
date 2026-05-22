@@ -106,6 +106,7 @@ export default function App() {
   const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic'); // Toggle for search logic
   const [selectedComparisonDate, setSelectedComparisonDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [segSearch, setSegSearch] = useState<string>('');
+  const [badDebtSearch, setBadDebtSearch] = useState<string>('');
   const [segPage, setSegPage] = useState<number>(1);
   const [segPageSize, setSegPageSize] = useState<number>(50);
   const [isLoadingPersisted, setIsLoadingPersisted] = useState(true);
@@ -883,10 +884,6 @@ export default function App() {
               />
             </div>
           </div>
-          <button onClick={() => fileInputRef.current?.click()} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
-            <Upload className="w-4 h-4" />
-            Thay đổi File
-          </button>
         </div>
 
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in duration-500">
@@ -1788,6 +1785,26 @@ export default function App() {
     const tenKhangCol = findColumn(COLUMN_KEYWORDS.TEN_KHANG);
     const ngayPhCol = findColumn(COLUMN_KEYWORDS.NGAY_PHANH);
     const tongTienCol = findColumn(COLUMN_KEYWORDS.TONG_TIEN);
+    const kyCol = findColumn(COLUMN_KEYWORDS.KY);
+
+    const filteredUniqueInvoices = (badDebtData.uniqueInvoices || []).filter((r: any) => {
+      const q = badDebtSearch.trim().toLowerCase();
+      if (!q) return true;
+      const maKhang = maKhangCol ? String(r[maKhangCol] || '').toLowerCase() : '';
+      const tenKhang = tenKhangCol ? String(r[tenKhangCol] || '').toLowerCase() : '';
+      const kyVal = kyCol ? String(r[kyCol] || '').toLowerCase() : '';
+      const billingLabel = String(r._billingLabel || '').toLowerCase();
+
+      return maKhang.includes(q) || 
+             tenKhang.includes(q) || 
+             kyVal.includes(q) || 
+             billingLabel.includes(q) ||
+             `tháng ${billingLabel}`.includes(q) ||
+             `kỳ ${billingLabel}`.includes(q);
+    });
+
+    const filteredTotalAmount = filteredUniqueInvoices.reduce((sum: number, r: any) => sum + (Number(r[tongTienCol || '']) || 0), 0);
+    const filteredTotalCount = filteredUniqueInvoices.length;
 
     return (
       <div className="space-y-8 animate-in fade-in duration-500">
@@ -1925,12 +1942,56 @@ export default function App() {
           </div>
         </div>
 
-        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-50"><h4 className="text-sm font-black uppercase text-slate-900 tracking-widest italic">Chi tiết hóa đơn quá hạn (Danh sách khử trùng theo sery)</h4></div>
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in fade-in duration-300">
+          <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-linear-to-b from-white to-slate-50/25">
+            <div>
+              <h4 className="text-sm font-black uppercase text-slate-900 tracking-widest italic flex items-center gap-1.5">
+                <TableIcon className="w-4 h-4 text-red-500" />
+                Chi tiết hóa đơn quá hạn (Danh sách khử trùng theo sery)
+              </h4>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">
+                Lọc danh sách nợ độc lập và tính toán thống kê tức thời
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Lọc mã KH, tên KH, kỳ..."
+                  value={badDebtSearch}
+                  onChange={(e) => setBadDebtSearch(e.target.value)}
+                  className="bg-slate-50 border border-slate-200/60 pl-9 pr-8 py-2.5 rounded-xl text-xs font-bold outline-none w-64 focus:bg-white focus:border-red-400 transition-all font-sans shadow-xs"
+                />
+                {badDebtSearch && (
+                  <button
+                    onClick={() => setBadDebtSearch('')}
+                    className="absolute right-2.5 top-2.5 w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 text-sm font-black"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 bg-red-50 border border-red-100/50 rounded-xl px-3 py-1.5 shadow-xs">
+                <div>
+                  <p className="text-[8px] font-black uppercase text-red-500/70 tracking-wider">Số hóa đơn</p>
+                  <p className="text-xs font-black text-red-700">{filteredTotalCount.toLocaleString()} HĐ</p>
+                </div>
+                <div className="h-6 w-[1.5px] bg-red-200/30 mx-1" />
+                <div>
+                  <p className="text-[8px] font-black uppercase text-red-500/70 tracking-wider">Tổng tiền lọc</p>
+                  <p className="text-xs font-black text-red-700">{filteredTotalAmount.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-separate border-spacing-0">
               <thead>
-                <tr className="bg-slate-50">
+                <tr className="bg-slate-50/50">
                   <th className="px-6 py-4 text-left font-black uppercase text-[10px] text-slate-400">Mã KH</th>
                   <th className="px-6 py-4 text-left font-black uppercase text-[10px] text-slate-400">Tên Khách Hàng</th>
                   <th className="px-6 py-4 text-center font-black uppercase text-[10px] text-slate-400">Loại KH</th>
@@ -1942,27 +2003,38 @@ export default function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 italic">
-                {badDebtData.uniqueInvoices.slice(0, 100).map((r: any, i) => (
-                  <tr key={i} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-bold">{r[maKhangCol || '']?.toString()}</td>
-                    <td className="px-6 py-4 font-bold text-slate-600 opacity-70 uppercase">{r[tenKhangCol || '']?.toString()}</td>
-                    <td className="px-6 py-4 text-center">
-                      {r._customerType === 'Tổ chức' ? (
-                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black uppercase">Tổ chức</span>
-                      ) : (
-                        <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-100 rounded-full text-[10px] font-black uppercase">Cá nhân</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs">{r._sery || 'N/A'}</td>
-                    <td className="px-6 py-4 text-center font-bold text-slate-500">Tháng {r._billingLabel}</td>
-                    <td className="px-6 py-4 text-center text-slate-400 tabular-nums">{r[ngayPhCol || '']?.toString()}</td>
-                    <td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-[10px] font-black">{r._diffDays} ngày</span></td>
-                    <td className="px-6 py-4 text-right font-black text-slate-900">{(Number(r[tongTienCol]) || 0).toLocaleString()} đ</td>
+                {filteredUniqueInvoices.length > 0 ? (
+                  filteredUniqueInvoices.slice(0, 200).map((r: any, i) => (
+                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 font-bold">{r[maKhangCol || '']?.toString()}</td>
+                      <td className="px-6 py-4 font-bold text-slate-600 opacity-70 uppercase">{r[tenKhangCol || '']?.toString()}</td>
+                      <td className="px-6 py-4 text-center">
+                        {r._customerType === 'Tổ chức' ? (
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black uppercase">Tổ chức</span>
+                        ) : (
+                          <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-100 rounded-full text-[10px] font-black uppercase">Cá nhân</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs">{r._sery || 'N/A'}</td>
+                      <td className="px-6 py-4 text-center font-bold text-slate-500">{r._billingLabel}</td>
+                      <td className="px-6 py-4 text-center text-slate-400 tabular-nums">{r[ngayPhCol || '']?.toString()}</td>
+                      <td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-[10px] font-black">{r._diffDays} ngày</span></td>
+                      <td className="px-6 py-4 text-right font-black text-slate-900">{(Number(r[tongTienCol]) || 0).toLocaleString()}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400 italic">Không tìm thấy dữ liệu hóa đơn trùng khớp với bộ lọc.</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
+          {filteredUniqueInvoices.length > 200 && (
+            <div className="p-4 bg-slate-50 text-center text-[10px] font-black uppercase text-slate-400 tracking-widest border-t border-slate-100">
+              Đang hiển thị 200 dòng đầu tiên của tổng số {filteredUniqueInvoices.length.toLocaleString()} kết quả lọc. Hãy gõ tìm kiếm chi tiết hơn để thu hẹp kết quả.
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2049,7 +2121,14 @@ export default function App() {
               <span className="text-xl font-bold tracking-tighter uppercase italic">{new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
            </div>
            <div className="flex gap-2">
-             <button onClick={() => { localforage.clear(); setData(null); }} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition" title="Xóa dữ liệu"><X className="w-5 h-5" /></button>
+             <button 
+               onClick={() => { localforage.clear(); setData(null); }} 
+               className="px-4 py-2 bg-red-50 border border-red-100/50 hover:bg-red-100 text-red-600 rounded-xl transition flex items-center gap-2 text-xs font-black uppercase tracking-wider" 
+               title="Import file mới"
+             >
+               <X className="w-4 h-4" />
+               <span>Import file</span>
+             </button>
            </div>
         </header>
 
