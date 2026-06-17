@@ -1143,6 +1143,18 @@ export default function App() {
               />
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button 
+              onClick={() => {
+                setIsReportOpen(true);
+                generateAiReport();
+              }}
+              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-colors cursor-pointer shadow-md shadow-indigo-100"
+            >
+              <Sparkles className="w-4 h-4 animate-pulse text-indigo-200" /> BÁO CÁO AI (WORD)
+            </button>
+          </div>
         </div>
 
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in duration-500">
