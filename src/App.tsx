@@ -44,7 +44,11 @@ import {
   CheckCircle2,
   Layers,
   Search,
-  Calendar
+  Calendar,
+  Sparkles,
+  Copy,
+  FileText,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import localforage from 'localforage';
@@ -110,6 +114,11 @@ export default function App() {
   const [segPage, setSegPage] = useState<number>(1);
   const [segPageSize, setSegPageSize] = useState<number>(50);
   const [isLoadingPersisted, setIsLoadingPersisted] = useState(true);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportText, setReportText] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset segmentation page and search when session changes
@@ -460,6 +469,51 @@ export default function App() {
       }
     };
   }, [data, findColumn, selectedComparisonDate]);
+
+  const globalDebtCycles = useMemo(() => {
+    if (!data) return [];
+    const maKhangCol = findColumn(COLUMN_KEYWORDS.MA_KHANG);
+    const tongTienCol = findColumn(COLUMN_KEYWORDS.TONG_TIEN);
+    if (!maKhangCol || !tongTienCol) return [];
+
+    const makhMap = new Map<string, { count: number; totalTien: number }>();
+    data.rows.forEach(r => {
+      const makh = r[maKhangCol]?.toString() || '';
+      if (!makh) return;
+      const amount = Number(r[tongTienCol]) || 0;
+      const existing = makhMap.get(makh);
+      if (existing) {
+        existing.count += 1;
+        existing.totalTien += amount;
+      } else {
+        makhMap.set(makh, { count: 1, totalTien: amount });
+      }
+    });
+
+    const cycleMap = new Map<number, { count: number; invoices: number; amount: number }>();
+    makhMap.forEach((val) => {
+      const existing = cycleMap.get(val.count);
+      if (existing) {
+        existing.count += 1;
+        existing.invoices += val.count;
+        existing.amount += val.totalTien;
+      } else {
+        cycleMap.set(val.count, {
+          count: 1,
+          invoices: val.count,
+          amount: val.totalTien
+        });
+      }
+    });
+
+    const terms: any[] = [];
+    cycleMap.forEach((v, k) => {
+      terms.push({ term: k, count: v.count, invoices: v.invoices, amount: v.amount });
+    });
+    terms.sort((a, b) => a.term - b.term);
+
+    return terms;
+  }, [data, findColumn]);
 
   // --- Data Analysis for Overview ---
 
@@ -819,6 +873,211 @@ export default function App() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'No_Kho_Doi_Duy_Nhat');
     saveAsExcel(wb, `DS_No_Kho_Doi_Duy_Nhat_${selectedComparisonDate}.xlsx`);
+  };
+
+  const generateAiReport = async () => {
+    if (!badDebtData || !phienData) return;
+    setIsGeneratingReport(true);
+    setReportError('');
+    setReportText('');
+    try {
+      const formattedData = {
+        selectedComparisonDate,
+        totalAmount: badDebtData.totalAmount.toLocaleString(),
+        totalHD: badDebtData.totalHD.toLocaleString(),
+        totalTcAmount: badDebtData.totalTcAmount.toLocaleString(),
+        totalTcCount: badDebtData.totalTcCount.toLocaleString(),
+        totalTcPercentage: badDebtData.totalTcPercentage,
+        totalCnAmount: badDebtData.totalCnAmount.toLocaleString(),
+        totalCnCount: badDebtData.totalCnCount.toLocaleString(),
+        totalCnPercentage: badDebtData.totalCnPercentage,
+        monthlyBreakdown: badDebtData.monthSummary.map((m: any) => ({
+          "Tháng/Năm": m.monthLabel,
+          "Số hóa đơn": m.invoiceCount,
+          "Tổng tiền nợ (đ)": m.totalAmount.toLocaleString(),
+          "Tổ chức (TC)": `${m.tcCount} HĐ (${m.tcAmount.toLocaleString()} đ)`,
+          "Cá nhân (CN)": `${m.cnCount} HĐ (${m.cnAmount.toLocaleString()} đ)`,
+        })),
+        phienData: {
+          phien20: { hd: phienData.phien20.hd, tien: phienData.phien20.tien },
+          phien1: { hd: phienData.phien1.hd, tien: phienData.phien1.tien },
+          phien2: { hd: phienData.phien2.hd, tien: phienData.phien2.tien },
+          phien3: { hd: phienData.phien3.hd, tien: phienData.phien3.tien },
+          tong: { hd: phienData.tong.hd, tien: phienData.tong.tien },
+          thoaiHoan: { customers: phienData.thoaiHoan.customers, hd: phienData.thoaiHoan.hd, tien: phienData.thoaiHoan.tien },
+          noKhoDoi: { customers: phienData.noKhoDoi.customers, hd: phienData.noKhoDoi.hd, tien: phienData.noKhoDoi.tien }
+        },
+        globalDebtCycles: globalDebtCycles.map((c: any) => ({
+          "Số Kỳ": c.term,
+          "Khách Hàng": c.count,
+          "Hóa Đơn": c.invoices,
+          "Thành Tiền": c.amount
+        }))
+      };
+
+      const res = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reportData: formattedData }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Lỗi máy chủ (${res.status}).`);
+      }
+
+      const result = await res.json();
+      if (!result.reportText) {
+        throw new Error('Nội dung báo cáo trống rỗng. Hãy thử cấu hình lại hoặc ấn tạo lại.');
+      }
+      setReportText(result.reportText);
+    } catch (err: any) {
+      console.error("Lỗi khi kết nối với AI:", err);
+      setReportError(err.message || 'Lỗi bất ngờ xảy ra khi kết nối máy chủ tạo báo cáo.');
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const downloadAsWord = () => {
+    if (!reportText) return;
+    
+    // Convert lines of plain text report into paragraph elements styled for MS Word
+    const lines = reportText.split('\n');
+    let bodyHtml = '';
+    
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      if (!trimmed) {
+        bodyHtml += '<p class="no-indent">&nbsp;</p>';
+        i++;
+        continue;
+      }
+      
+      // If the line starts and ends with "|" (markdown table row)
+      if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 2) {
+        // Collect all consecutive table rows
+        const tableRows: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableRows.push(lines[i].trim());
+          i++;
+        }
+        
+        // Convert collected markdown table rows to a styled HTML <table> for MS Word
+        bodyHtml += '<table border="1" cellspacing="0" cellpadding="6" style="border-collapse: collapse; border: 1px solid #111111; font-family:\'Times New Roman\', serif; font-size:10.5pt; width:100%; margin-top:8pt; margin-bottom:12pt;">';
+        
+        // Track first row separate from hyphens row
+        let hasHeaderSeparatorSkip = false;
+        
+        tableRows.forEach((rowStr, rowIndex) => {
+          // Remove leading and trailing pipe
+          const cleanRow = rowStr.replace(/^\|/, '').replace(/\|$/, '');
+          const cells = cleanRow.split('|');
+          
+          // Check if it's a separator line e.g. |---|---|
+          const isSeparator = cells.every(c => /^[:\s-]*$/.test(c.trim()));
+          if (isSeparator) {
+            hasHeaderSeparatorSkip = true;
+            return; // skip rendering
+          }
+          
+          bodyHtml += '<tr style="page-break-inside: avoid;">';
+          cells.forEach((cell) => {
+            const trimmedCell = cell.trim();
+            const isHeader = (rowIndex === 0 && !hasHeaderSeparatorSkip) || 
+                             trimmedCell === 'Tháng/năm' || 
+                             trimmedCell === 'Tháng' || 
+                             trimmedCell === 'Hóa đơn' || 
+                             trimmedCell === 'Số Kỳ' || 
+                             trimmedCell === 'Thành tiền' || 
+                             trimmedCell === 'Trong đó' || 
+                             trimmedCell === 'Cơ Cấu TC/CN';
+            
+            const cellType = isHeader ? 'th' : 'td';
+            const fontWeight = isHeader ? 'bold' : 'normal';
+            const bgColor = isHeader ? '#eaeaea' : 'transparent';
+            
+            bodyHtml += `<${cellType} style="border: 1px solid #111111; padding: 6px; font-weight: ${fontWeight}; background-color: ${bgColor}; text-align: center; font-family:'Times New Roman', serif;">${trimmedCell || '&nbsp;'}</${cellType}>`;
+          });
+          bodyHtml += '</tr>';
+        });
+        
+        bodyHtml += '</table>';
+        continue;
+      }
+      
+      // Map common Vietnam formal layout items to aligned/weighted classes
+      const isQuocHieu = trimmed.includes('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM');
+      const isTieuNgu = trimmed.includes('Độc lập - Tự do - Hạnh phúc');
+      const isHeaderLine = trimmed.includes('TẬP ĐOÀN ĐIỆN LỰC') || trimmed.includes('TỔNG CÔNG TY DÂN') || trimmed.includes('CÔNG TY ĐIỆN LỰC');
+      const isBaoCaoTitle = trimmed.includes('BÁO CÁO') || trimmed.includes('Bao cáo:');
+      const isDatePlace = trimmed.includes('ngày') && trimmed.includes('tháng') && trimmed.includes('năm');
+      const isNoiNhan = trimmed.startsWith('Nơi nhận') || trimmed.startsWith('- ');
+      const isApprover = trimmed.includes('GIÁM ĐỐC') || trimmed.includes('TRƯỞNG PHÒNG') || trimmed.includes('KÝ DUYỆT') || trimmed.includes('NGƯỜI LẬP BIỂU');
+      
+      if (isQuocHieu || isTieuNgu || isBaoCaoTitle || isDatePlace || isApprover) {
+        bodyHtml += `<p class="center" style="font-weight: ${isQuocHieu || isBaoCaoTitle || isApprover ? 'bold' : 'normal'}; text-transform: ${isQuocHieu || isBaoCaoTitle ? 'uppercase' : 'none'}; text-indent: 0; margin-bottom: 4pt;">${trimmed}</p>`;
+        i++;
+        continue;
+      }
+      
+      if (isHeaderLine) {
+        bodyHtml += `<p class="no-indent" style="font-weight: bold; margin-bottom: 2pt;">${trimmed}</p>`;
+        i++;
+        continue;
+      }
+
+      // Format standard roman headers
+      if (trimmed.startsWith('I.') || trimmed.startsWith('II.') || trimmed.startsWith('III.') || trimmed.startsWith('IV.') || trimmed.startsWith('V.')) {
+        bodyHtml += `<h2 style="font-family:'Times New Roman', serif; font-size:13.5pt; font-weight:bold; margin-top:12pt; margin-bottom:4pt;">${trimmed}</h2>`;
+        i++;
+        continue;
+      }
+      
+      // Format simple bullet highlights
+      if (trimmed.startsWith('-') || trimmed.startsWith('+') || trimmed.startsWith('*')) {
+        bodyHtml += `<p class="no-indent" style="padding-left: 0.25in; text-indent: -0.15in; margin-bottom: 4pt;">${trimmed}</p>`;
+      } else {
+        bodyHtml += `<p style="text-indent: 0.5in; margin-bottom: 6pt;">${trimmed}</p>`;
+      }
+      i++;
+    }
+
+    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+          "xmlns:w='urn:schemas-microsoft-com:office:word' " +
+          "xmlns='http://www.w3.org/TR/REC-html40'>" +
+          "<head><title>Bao Cao D-Office</title><meta charset='utf-8'>" +
+          "<style>" +
+          "@page Section1 {size:8.5in 11.0in; margin:1.0in 1.0in 1.0in 1.25in; mso-header-margin:.5in; mso-footer-margin:.5in; mso-paper-source:0;}" +
+          "div.Section1 {page:Section1;}" +
+          "body {font-family:'Times New Roman', serif; font-size:13pt; line-height:1.45; color:#000000;}" +
+          "h2 {font-family:'Times New Roman', serif; font-size:13pt; font-weight:bold; margin:10pt 0 4pt 0;}" +
+          "p {margin:0 0 6pt 0; text-align:justify; text-indent:0.5in;}" +
+          "p.no-indent {text-indent:0;}" +
+          "p.center {text-align:center; text-indent:0; margin:0 0 4pt 0;}" +
+          "</style>" +
+          "</head><body><div class='Section1'>";
+    
+    const footer = "</div></body></html>";
+    const fullHtml = header + bodyHtml + footer;
+    
+    const blob = new Blob(['\ufeff' + fullHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Bao_cao_phan_tich_cong_no_DOffice.doc';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const renderEmptyState = () => (
@@ -1821,7 +2080,18 @@ export default function App() {
               </div>
             </div>
           </div>
-          <button onClick={exportNoKhoDoiData} className="px-6 py-3 bg-red-600 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2"><Download className="w-4 h-4" /> Tải DS Khó Đòi</button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button 
+              onClick={() => {
+                setIsReportOpen(true);
+                generateAiReport();
+              }}
+              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-colors cursor-pointer shadow-md shadow-indigo-100"
+            >
+              <Sparkles className="w-4 h-4 animate-pulse text-indigo-200" /> BÁO CÁO AI (WORD)
+            </button>
+            <button onClick={exportNoKhoDoiData} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-colors cursor-pointer"><Download className="w-4 h-4" /> Tải DS Khó Đòi</button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2144,6 +2414,134 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* D-Office AI Report Generator Modal */}
+      {isReportOpen && (
+        <div className="bg-slate-900/65 backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-linear-to-b from-white to-slate-50/30">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900 tracking-wider italic flex items-center gap-1.5">
+                    Khởi tạo báo cáo AI (Mẫu WORD trình ký D-Office)
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5 font-bold">
+                    Soạn thảo văn bản hành chính tự động theo tiêu chuẩn nghiệp vụ EVN
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsReportOpen(false)} 
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors font-bold cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50">
+              {isGeneratingReport ? (
+                <div className="py-16 flex flex-col items-center justify-center text-center space-y-6">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
+                    <Sparkles className="w-6 h-6 text-indigo-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                  </div>
+                  <div className="space-y-2 max-w-sm">
+                    <h4 className="text-xs font-black uppercase text-indigo-700 tracking-widest italic animate-pulse">
+                      Hệ thống AI đang phân tích...
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                      Đang xử lý {badDebtData?.totalHD} hóa đơn nợ khó đòi, bốc tách dữ liệu cơ cấu Tổ chức/Cá nhân và phân bổ dòng kỳ nợ để biên soạn báo cáo chuẩn văn phòng...
+                    </p>
+                  </div>
+                </div>
+              ) : reportError ? (
+                <div className="py-8 flex flex-col items-center justify-center text-center space-y-4 max-w-md mx-auto">
+                  <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center border border-red-100 shadow-sm animate-bounce">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black uppercase text-red-600 tracking-wider italic">
+                      Lỗi tạo báo cáo
+                    </h4>
+                    <p className="text-xs text-slate-500 font-bold leading-relaxed bg-red-50/50 p-4 border border-red-100/30 rounded-xl">
+                      {reportError}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={generateAiReport} 
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase cursor-pointer transition-colors shadow-xs"
+                  >
+                    Thử tạo lại báo cáo
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Action Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white border border-slate-100 rounded-2xl shadow-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button 
+                        onClick={downloadAsWord} 
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-emerald-50"
+                      >
+                        <FileText className="w-4 h-4" /> Tải về File Word (.doc)
+                      </button>
+                      
+                      <button 
+                        onClick={() => {
+                          if (!reportText) return;
+                          navigator.clipboard.writeText(reportText);
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2000);
+                        }} 
+                        className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-4 h-4 text-emerald-400" /> Đã sao chép!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4" /> Sao chép văn bản
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <button 
+                      onClick={generateAiReport} 
+                      className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black uppercase transition-colors cursor-pointer border border-indigo-100/50"
+                    >
+                      Viết lại báo cáo khác (AI)
+                    </button>
+                  </div>
+
+                  {/* Document Preview (Tờ trình / Báo cáo chuẩn hành chính Việt Nam) */}
+                  <div className="bg-slate-100 border border-slate-200 rounded-[2rem] p-4 md:p-8 overflow-y-auto max-h-[50vh] shadow-inner-xs">
+                    <div className="bg-white max-w-[21cm] mx-auto min-h-[29.7cm] p-8 md:p-12 shadow-md border border-slate-200/50 rounded-xl relative font-serif text-slate-800 text-sm leading-relaxed whitespace-pre-wrap select-text">
+                      {/* Ambient Watermark */}
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-[0.03] select-none pointer-events-none text-center">
+                        <p className="text-7xl font-sans font-black tracking-widest leading-none rotate-12">EVN TRÌNH KÝ</p>
+                      </div>
+                      
+                      {reportText}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 text-center text-[9px] font-bold text-slate-400 tracking-wider">
+              Báo cáo được biên tập tự động bởi trí tuệ nhân tạo dựa trên thống kê duy nhất đã khử trùng lắp nốt quá hạn {'>'}177 ngày. Chú ý kiểm tra lại độ chính xác pháp lý trước khi phát hành chính thức trên D-Office.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
