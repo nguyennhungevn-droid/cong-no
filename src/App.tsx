@@ -876,10 +876,24 @@ export default function App() {
   };
 
   const generateAiReport = async () => {
-    if (!badDebtData || !phienData) return;
-    setIsGeneratingReport(true);
+    setIsReportOpen(true);
     setReportError('');
     setReportText('');
+
+    if (!data) {
+      setReportError('Vui lòng import file Excel công nợ trước khi bắt đầu tạo báo cáo AI.');
+      return;
+    }
+    if (!phienData) {
+      setReportError('Không thể phân tích cơ cấu các phiên thu nợ (GCS). Vui lòng kiểm tra lại cấu trúc file Excel.');
+      return;
+    }
+    if (!badDebtData) {
+      setReportError('Không tìm thấy dữ liệu nợ khó đòi (>177 ngày) tương thích. Vui lòng kiểm tra lại cột Ngày phát hành hóa đơn (NGAY_PHANH) hoặc Tiêu chuẩn ngày so sánh.');
+      return;
+    }
+
+    setIsGeneratingReport(true);
     try {
       const formattedData = {
         selectedComparisonDate,
@@ -930,7 +944,7 @@ export default function App() {
 
       const result = await res.json();
       if (!result.reportText) {
-        throw new Error('Nội dung báo cáo trống rỗng. Hãy thử cấu hình lại hoặc ấn tạo lại.');
+        throw new Error('Nội dung báo cáo trống rỗng. Hãy thử cấu hình hoặc ấn tạo lại.');
       }
       setReportText(result.reportText);
     } catch (err: any) {

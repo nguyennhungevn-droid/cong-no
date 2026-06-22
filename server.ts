@@ -114,17 +114,23 @@ async function startServer() {
 
       // Bad Debt monthly breakdown table with "Trong đó" column
       // We will split the bad debt corporate totals into DN/CTY (30%) and KHNSH (70%)
-      const totalCnCountVal = parseInt(reportData.totalCnCount?.replace(/\./g, '') || '0') || 0;
-      const totalCnAmountVal = parseInt(reportData.totalCnAmount?.replace(/\./g, '') || '0') || 0;
-      const totalTcCountVal = parseInt(reportData.totalTcCount?.replace(/\./g, '') || '0') || 0;
-      const totalTcAmountVal = parseInt(reportData.totalTcAmount?.replace(/\./g, '') || '0') || 0;
-      const totalBadDebtVal = parseInt(reportData.totalAmount?.replace(/\./g, '') || '0') || 0;
+      const parseFormattedInt = (val: any) => {
+        if (!val) return 0;
+        const cleaned = String(val).replace(/[^0-9-]/g, "");
+        return parseInt(cleaned, 10) || 0;
+      };
+
+      const totalCnCountVal = parseFormattedInt(reportData.totalCnCount);
+      const totalCnAmountVal = parseFormattedInt(reportData.totalCnAmount);
+      const totalTcCountVal = parseFormattedInt(reportData.totalTcCount);
+      const totalTcAmountVal = parseFormattedInt(reportData.totalTcAmount);
+      const totalBadDebtVal = parseFormattedInt(reportData.totalAmount);
 
       const dnCtyCount = Math.round(totalTcCountVal * 0.3);
       const dnCtyAmount = Math.round(totalTcAmountVal * 0.4);
       const khNshCount = totalTcCountVal - dnCtyCount;
       const khNshAmount = totalTcAmountVal - dnCtyAmount;
-      const badDebtRatio = ((totalBadDebtVal / tongTienVal) * 100).toFixed(4);
+      const badDebtRatio = tongTienVal > 0 ? ((totalBadDebtVal / tongTienVal) * 100).toFixed(4) : "0.0000";
 
       let badDebtMonthRows = '';
       if (reportData.monthlyBreakdown && reportData.monthlyBreakdown.length > 0) {
@@ -145,7 +151,7 @@ async function startServer() {
       const prompt = `Soạn thảo báo cáo tình hình thu và tồn thu tiền điện chính xác tuyệt đối theo mẫu văn bản hành chính Việt Nam dưới đây. 
 Văn bản cần sử dụng ngôn từ cực kỳ trang trọng, chuẩn mực của Tập đoàn Điện lực Việt Nam (EVN).
 
-Bất kỳ sửa đổi về cấu trúc, tiêu đề hay nội dung cốt lõi của các bảng và phần kiến nghị đều bị cấm. Chỉ cập nhật các giá trị số và ngày tháng từ dữ liệu phân tích thực tế được cung cấp.
+Bất kỳ sửa đổi về cấu trúc, tiêu đề hay nội dung cốt lõi của các bảng và phần kiến nghị gốc đều bị cấm. Chỉ cập nhật các giá trị số và ngày tháng từ dữ liệu phân tích thực tế được cung cấp. Bạn có thể bổ sung thêm một số khuyến nghị hữu ích ở cuối phần kiến nghị theo đúng tinh thần quy trình thu nợ của EVN.
 
 Dưới đây là nội dung mẫu cấu trúc và văn bản bạn PHẢI tuân thủ tuyệt đối:
 
@@ -192,6 +198,11 @@ II./Kiến nghị cần được quan tâm:
 - Hiện có ${reportData.phienData?.thoaiHoan?.customers || 0} khách hàng thoái hoàn nhờ Đội quan tâm theo dõi để khách hàng cấn trừ tiền thoái hoàn.
 - Đội thu ghi quan tâm hơn 22 hóa đơn (13 kh)= 14,676,515 đồng đã đổi tên sang chủ thể mới : TRUNG TÂM QUẢN LÝ ĐIỀU HÀNH GIAO THÔNG ĐÔ THỊ nhưng vẫn chưa đổi chủ thể cho kỳ nợ tháng 2,3/${yearVal}
 
+*Các khuyến nghị bổ sung dựa trên quy trình quy chuẩn nghiệp vụ của Tập đoàn Điện lực Việt Nam (EVN):*
+1. Áp dụng triệt để hệ thống gửi thông báo tự động (SMS Brandname, Zalo OA, thông báo đẩy CSKH) trong ngày đầu phát sinh chu kỳ nợ đối với các nhóm khách hàng cá nhân/hộ tiêu dùng sinh hoạt nhằm giảm tải tác vụ đôn đốc trực tiếp.
+2. Thiết lập quy chuẩn chấm điểm tín nhiệm thanh toán tự động đối với các đơn vị doanh nghiệp, gửi cảnh báo rủi ro thanh toán chậm trễ cấp bách đến các Đội tuyển thu quản lý địa bàn.
+3. Tổ chức đợt kiểm tra ghi nhận hiện trạng thực tế đối với các chủ thể công nợ kéo dài, ký biên bản cam kết lộ trình thanh toán chi tiết hoặc phối hợp cơ quan chức năng xử lý cưỡng chế theo quy định pháp luật hiện hành.
+
 Trân trọng kính trình./.
 
 Nơi nhận:
@@ -211,8 +222,8 @@ YÊU CẦU:
 
       let response;
       let lastError: any = null;
-      // List of models in order of preference. gemini-2.5-flash is the standard recommended model in Gemini SDK.
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.5-pro"];
+      // List of valid models supported in the @google/genai SDK on AI Studio.
+      const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite"];
 
       for (const modelName of modelsToTry) {
         let attempts = 0;
